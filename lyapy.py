@@ -29,6 +29,9 @@ mask_fromfile = np.loadtxt('mask.savepy')
 tau_tot_ism_grid_fromfile = pyfits.getdata('tau_tot_ism_grid.fits')
 lya_intrinsic_profile_grid_fromfile = pyfits.getdata('lya_intrinsic_profile_grid.fits')
 
+from matplotlib import rc
+rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+rc('text', usetex=True)
 
 
 
@@ -654,11 +657,6 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
 
     ### MAKING FINAL LYA FIT PLOT ############
 
-    from matplotlib import rc
-    rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-    ## for Palatino and other serif fonts use:
-    #rc('font',**{'family':'serif','serif':['Palatino']})
-    rc('text', usetex=True)
 
     plt.ion()
     f = plt.figure()
@@ -895,9 +893,6 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
     if do_plot:
       ### MAKING FINAL LYA FIT PLOT ############
 
-      #from matplotlib import rc
-      #rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-      #rc('text', usetex=True)
 
       f = plt.figure()
       plt.rc('text', usetex=True)
