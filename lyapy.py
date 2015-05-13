@@ -6,6 +6,7 @@ import astropy.table
 import voigt
 import itertools
 import multiprocessing
+import scipy.stats
 
 pc_in_cm = 3e18
 au_in_cm = 1.5e13
@@ -458,6 +459,21 @@ def damped_lya_profile_gridsearch(a,b,c,d,e,f,g,h,i):
     return chisq
 
 
+def delta_chi2(df,probability_of_exceeding):
+
+    grid_size = 5000
+    x = np.linspace(0,100,grid_size)
+    pdf = scipy.stats.chi2.pdf(x, df, loc=0, scale=1)
+    dx = x[1]-x[0]
+    prob_sum = 0
+    i=grid_size
+    while prob_sum < probability_of_exceeding:
+      i-=1
+      prob_sum += pdf[i]*dx
+    delta_chi2_statistic = x[i]/df
+
+    return delta_chi2_statistic
+
 
 def LyA_fit(input_filename,initial_parameters,save_figure=True):
 
@@ -528,10 +544,10 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
 
     if continue_parameter == 'yes':
       chi2 = np.sum( ( (flux_to_fit[~mask] - initial_fit[~mask]) / error_to_fit[~mask] )**2 )
-      dof = len(flux_to_fit[~mask]) - 9.
+      dof = len(flux_to_fit[~mask]) - len(initial_parameters)
     else:
       chi2 = np.sum( ( (flux_to_fit - initial_fit) / error_to_fit )**2 )
-      dof = len(flux_to_fit) - 9.
+      dof = len(flux_to_fit) - len(initial_parameters)
 
     reduced_chi2 = chi2/dof
 
@@ -819,9 +835,9 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
 
     # Degrees of Freedom = (# bins) - 1 - (# parameters) -- needs to be edited for masking
     if mask.sum() != 0: 
-      dof = len(flux_norm_to_fit[~mask]) - 9
+      dof = len(flux_norm_to_fit[~mask]) - len(parameter_range)
     else:
-      dof = len(flux_norm_to_fit) - 9
+      dof = len(flux_norm_to_fit) - len(parameter_range)
 
     reduced_chisq_minimum = np.min(chisq_results)/dof
 
@@ -867,13 +883,13 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
 
 
     #### Confidence Intervals
-    big_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
+    big_reduced_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
                                len(vs_b_range),len(am_b_range),len(fw_b_range),
                                len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
     for i in range(len(iter_cycle)):
-      big_chisq_grid[iter_cycle[i][0],iter_cycle[i][1],iter_cycle[i][2],iter_cycle[i][3],
+      big_reduced_chisq_grid[iter_cycle[i][0],iter_cycle[i][1],iter_cycle[i][2],iter_cycle[i][3],
                      iter_cycle[i][4],iter_cycle[i][5],iter_cycle[i][6],iter_cycle[i][7],
-                     iter_cycle[i][8]] = chisq_results[i]
+                     iter_cycle[i][8]] = chisq_results[i]/dof
 
 
     if do_plot:
@@ -947,7 +963,7 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
       ax.text(0.97,0.89,r'$\chi^{2}_{\nu}$ = '+str(round(reduced_chisq_minimum,2)),verticalalignment='top', 
         horizontalalignment='right',transform=ax.transAxes,fontsize=12., color='black')
 
-    return big_chisq_grid
+    return big_reduced_chisq_grid
 
 
 

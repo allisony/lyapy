@@ -36,13 +36,15 @@ parameter_range = [vs_n_range,am_n_range,fw_n_range,vs_b_range,am_b_range,
 
 t0 = time.time()
 
-chisq_grid = lyapy.LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True)
+reduced_chisq_grid = lyapy.LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True)
 
 t1 = time.time()
 
 print 'Time elapsed (s) = ' + str(t1-t0)
 print 'Number of jobs = ' + str(num_jobs)
 print 'Rate (per second) = ' + str(num_jobs/(t1-t0))
+
+
 
 
 
