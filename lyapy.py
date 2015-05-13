@@ -819,7 +819,7 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
                                            range(len(vs_b_range)),range(len(am_b_range)),range(len(fw_b_range)),
                                            range(len(h1_col_range)),range(len(h1_b_range)),range(len(h1_vel_range)))))
 
-
+    print "Beginning calculation"
     pool = multiprocessing.Pool(processes=num_cores)
     chisq_results = pool.map(multi_run_wrapper,iter_cycle)
     pool.close()
