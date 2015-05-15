@@ -23,9 +23,9 @@ data_to_fit_fromfile = np.loadtxt('data_to_fit.savepy')
 wave_to_fit_fromfile = data_to_fit_fromfile[0,:]
 flux_norm_to_fit_fromfile = data_to_fit_fromfile[1,:]
 error_norm_to_fit_fromfile = data_to_fit_fromfile[2,:]
-resolution_array_fromfile = np.loadtxt('resolution.savepy')
-resolution_fromfile = resolution_array_fromfile[0]
-mask_fromfile = np.loadtxt('mask.savepy')
+#resolution_array_fromfile = np.loadtxt('resolution.savepy')
+#resolution_fromfile = resolution_array_fromfile[0]
+#mask_fromfile = np.loadtxt('mask.savepy')
 tau_tot_ism_grid_fromfile = pyfits.getdata('tau_tot_ism_grid.fits')
 lya_intrinsic_profile_grid_fromfile = pyfits.getdata('lya_intrinsic_profile_grid.fits')
 
@@ -368,12 +368,19 @@ def damped_lya_fitter(multisingle='multi'):
     
     return myclass
 
-def tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,save_file=True):
+def tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,resolution,
+                   mask,save_file=True):
+
+    fw = lya_rest/resolution
+
+    kernel = make_kernel(grid=wave_to_fit_fromfile,fwhm=fw)  
 
     tau_tot_ism_test = total_tau_profile_func(wave_to_fit,h1_col_range[0],
                                                   h1_b_range[0],h1_vel_range[0])
+    tau_tot_ism_test_convolved = np.convolve(tau_tot_ism_test,kernel,mode='same')
+
     tau_tot_ism_grid = np.zeros([len(h1_col_range),len(h1_b_range),len(h1_vel_range),
-                                                              len(tau_tot_ism_test)])
+                                                 len(tau_tot_ism_test_convolved)])
     for a in range(len(h1_col_range)):
       print '*** a = ' + str(a) + ' of ' + str(len(h1_col_range)-1) + ' ***' 
       for b in range(len(h1_b_range)):
@@ -382,7 +389,10 @@ def tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,save_file=Tr
       
           tot_ism = total_tau_profile_func(wave_to_fit,h1_col_range[a],
                                                h1_b_range[b],h1_vel_range[c]) 
-          tau_tot_ism_grid[a,b,c,:] = tot_ism
+          tot_ism_convolved = np.convolve(tot_ism,kernel,mode='same')
+          if mask.sum() != 0:
+            tot_ism_convolved[mask] = 0
+          tau_tot_ism_grid[a,b,c,:] = tot_ism_convolved
     
     if save_file:
       hdu = pyfits.PrimaryHDU(data=tau_tot_ism_grid)
@@ -391,15 +401,23 @@ def tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,save_file=Tr
     return
 
 def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_range,
-                             am_b_range,fw_b_range,save_file=True):
+                             am_b_range,fw_b_range,resolution,mask,save_file=True):
+
+    fw = lya_rest/resolution
+
+    kernel = make_kernel(grid=wave_to_fit_fromfile,fwhm=fw)  
+
 
     lya_intrinsic_profile_test = lya_intrinsic_profile_func(wave_to_fit,vs_n_range[0],
                                            am_n_range[0],fw_n_range[0],vs_b_range[0],
                                            am_b_range[0],fw_b_range[0])
+    lya_intrinsic_profile_test_convolved = np.convolve(lya_intrinsic_profile_test,
+                                           kernel,mode='same')
 
     lya_intrinsic_profile_grid = np.zeros([len(vs_n_range),len(am_n_range),
-                                           len(fw_n_range),len(vs_b_range),len(am_b_range),
-                                           len(fw_b_range),len(lya_intrinsic_profile_test)])
+                                           len(fw_n_range),len(vs_b_range),
+                                           len(am_b_range),len(fw_b_range),
+                                           len(lya_intrinsic_profile_test_convolved)])
 
     for a in range(len(vs_n_range)):
       print '*** a = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
@@ -415,8 +433,14 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
       
                 lya_intrinsic_profile = lya_intrinsic_profile_func(wave_to_fit,
                                             vs_n_range[a],am_n_range[b],fw_n_range[c],
-                                            vs_b_range[d],am_b_range[e],fw_b_range[f]) 
-                lya_intrinsic_profile_grid[a,b,c,d,e,f,:] = lya_intrinsic_profile
+                                            vs_b_range[d],am_b_range[e],fw_b_range[f])
+                lya_intrinsic_profile_convolved = np.convolve(lya_intrinsic_profile,
+                                                                 kernel,mode='same')
+                if mask.sum() != 0:
+                  lya_intrinsic_profile_convolved[mask] = 0
+
+                lya_intrinsic_profile_grid[a,b,c,d,e,f,:] = lya_intrinsic_profile_convolved
+
     
     if save_file:
       hdu = pyfits.PrimaryHDU(data=lya_intrinsic_profile_grid)
@@ -424,7 +448,45 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
 
     return
 
+def brute_force_gridsearch(vs_n_range,am_n_range,fw_n_range,vs_b_range,am_b_range,
+                           fw_b_range,h1_col_range,h1_b_range,h1_vel_range):
 
+    big_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
+                               len(vs_b_range),len(am_b_range),len(fw_b_range),
+                               len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
+
+
+    for a in range(len(vs_n_range)):
+      print '*** a = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
+      for b in range(len(am_n_range)):
+        print 'b = ' + str(b) + ' of ' + str(len(am_n_range)-1)
+        for c in range(len(fw_n_range)):
+          print 'c = ' + str(c) + ' of ' + str(len(fw_n_range)-1)
+          for d in range(len(vs_b_range)):
+
+            for e in range(len(am_b_range)):
+
+              for f in range(len(fw_b_range)):
+
+                for g in range(len(h1_col_range)):
+
+                  for h in range(len(h1_b_range)):
+
+                    for i in range(len(h1_vel_range)):
+
+                      tau_tot_ism = tau_tot_ism_grid_fromfile[g,h,i,:]
+
+                      lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
+    
+                      lyman_fit = lya_total * tau_tot_ism
+
+                      chisq = np.sum( ( (flux_norm_to_fit_fromfile - lyman_fit) / 
+                                         error_norm_to_fit_fromfile )**2 )
+
+                      big_chisq_grid[a,b,c,d,e,f,g,h,i] = chisq
+
+    return big_chisq_grid
+  
 
 
 def multi_run_wrapper(args):
@@ -440,24 +502,9 @@ def damped_lya_profile_gridsearch(a,b,c,d,e,f,g,h,i):
 
     lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
     
-    lya_obs_high = lya_total * tau_tot_ism
+    lyman_fit = lya_total * tau_tot_ism
 
-    ## Convolving the data to the proper resolution ##
-
-    stis_respow = resolution_fromfile  ## STIS resolution power
-
-    fw = lya_rest/stis_respow
-
-    aa = make_kernel(grid=wave_to_fit_fromfile,fwhm=fw)  
-
-    ## HERE IS THE MODEL TO COMPARE WITH THE DATA ##   
-    lyman_fit = np.convolve(lya_obs_high,aa,mode='same')
-
-    if mask_fromfile.sum() != 0:
-      chisq = np.sum( ( (flux_norm_to_fit_fromfile[~mask_fromfile] - 
-                       lyman_fit[~mask_fromfile]) / error_norm_to_fit_fromfile[~mask_fromfile] )**2 )
-    else:
-      chisq = np.sum( ( (flux_norm_to_fit_fromfile - lyman_fit) / error_norm_to_fit_fromfile )**2 )
+    chisq = np.sum( ( (flux_norm_to_fit_fromfile - lyman_fit) / error_norm_to_fit_fromfile )**2 )
 
     return chisq
 
@@ -516,6 +563,7 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
 
       if continue_parameter == 'yes':
         mask_switch = 'no'
+
 
     ## END MASK LOOP ##
 
@@ -734,7 +782,7 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
     return
 
 
-def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
+def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True,brute_force=False):
 
     ## Read in fits file ##
     spec_hdu = pyfits.open(input_filename)
@@ -797,39 +845,22 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
     h1_vel_range = parameter_range[8]
 
 
-    tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range)
+    tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,resolution,mask)
 
 
     intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_range,
-                                                               am_b_range,fw_b_range,)
+                                      am_b_range,fw_b_range,resolution,mask)
     ##################################
 
 
     ## write a text file with wave_to_fit,flux_norm_to_fit,hwave_all,resolution,mask
-    np.savetxt('data_to_fit.savepy',np.array([wave_to_fit,flux_norm_to_fit,error_to_fit/norm_const]))
+    flux_norm_to_fit_copy = flux_norm_to_fit.copy()
+    if mask.sum() != 0:
+      flux_norm_to_fit_copy[mask] = 0
+    np.savetxt('data_to_fit.savepy',np.array([wave_to_fit,flux_norm_to_fit_copy,
+               error_to_fit/norm_const]))
     np.savetxt('resolution.savepy',np.array([resolution,0]))
     np.savetxt('mask.savepy',mask)
-
-    ## parallelizing!  
-    #a,b,c,d,e,f,g,h,i = zip(*itertools.product(range(len(vs_n_range)),range(len(am_n_range)),range(len(fw_n_range)),
-    #                                           range(len(vs_b_range)),range(len(am_b_range)),range(len(fw_b_range)),
-    #                                           range(len(h1_col_range)),range(len(h1_b_range)),range(len(h1_vel_range))))
-
-    iter_cycle = np.transpose(zip(*itertools.product(range(len(vs_n_range)),range(len(am_n_range)),range(len(fw_n_range)),
-                                           range(len(vs_b_range)),range(len(am_b_range)),range(len(fw_b_range)),
-                                           range(len(h1_col_range)),range(len(h1_b_range)),range(len(h1_vel_range)))))
-
-    print "Beginning calculation"
-    pool = multiprocessing.Pool(processes=num_cores)
-    chisq_results = pool.map(multi_run_wrapper,iter_cycle)
-    pool.close()
-
-    ##### chisq_results is a list of length num_jobs.  The corresponding 9 parameters for each chi-square found in
-    ##### chisq_results are found in the num_jobs x 9 iter_cycle array.
-
-
-    ###
-
 
     # Degrees of Freedom = (# bins) - 1 - (# parameters) -- needs to be edited for masking
     if mask.sum() != 0: 
@@ -837,11 +868,41 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
     else:
       dof = len(flux_norm_to_fit) - len(parameter_range)
 
-    reduced_chisq_minimum = np.min(chisq_results)/dof
+
+    if brute_force:
+
+      big_reduced_chisq_grid = brute_force_gridsearch(vs_n_range,am_n_range,fw_n_range,vs_b_range,
+                               am_b_range,fw_b_range,h1_col_range,h1_b_range,h1_vel_range)/dof
+
+    else:
+      iter_cycle = np.transpose(zip(*itertools.product(range(len(vs_n_range)),
+                                range(len(am_n_range)),range(len(fw_n_range)),
+                                range(len(vs_b_range)),range(len(am_b_range)),
+                                range(len(fw_b_range)),range(len(h1_col_range)),
+                                range(len(h1_b_range)),range(len(h1_vel_range)))))
+
+      pool = multiprocessing.Pool(processes=num_cores)
+      print "Beginning Multiprocessing"
+      chisq_results = pool.map(multi_run_wrapper,iter_cycle)
+      print "Finished Multiprocessing"
+      pool.close()
+
+      #### Confidence Intervals
+      big_reduced_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
+                               len(vs_b_range),len(am_b_range),len(fw_b_range),
+                               len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
+      for i in range(len(iter_cycle)):
+        big_reduced_chisq_grid[iter_cycle[i][0],iter_cycle[i][1],iter_cycle[i][2],
+                     iter_cycle[i][3],iter_cycle[i][4],iter_cycle[i][5],
+                     iter_cycle[i][6],iter_cycle[i][7],
+                     iter_cycle[i][8]] = chisq_results[i]/dof
+
+    reduced_chisq_minimum = np.min(big_reduced_chisq_grid)/dof
+
+    import pdb; pdb.set_trace()
 
     ## Best fit parameters
-    chisq_min_indices = np.where( chisq_results == np.min(chisq_results) )
-    best_fit_indices = iter_cycle[chisq_min_indices[0][0],:]
+    best_fit_indices = np.where( big_reduced_chisq_grid == np.min(big_reduced_chisq_grid) )
     vs_n_final = vs_n_range[best_fit_indices[0]]
     am_n_final = am_n_range[best_fit_indices[1]]*norm_const
     fw_n_final = fw_n_range[best_fit_indices[2]]
@@ -880,14 +941,6 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True):
 
 
 
-    #### Confidence Intervals
-    big_reduced_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
-                               len(vs_b_range),len(am_b_range),len(fw_b_range),
-                               len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
-    for i in range(len(iter_cycle)):
-      big_reduced_chisq_grid[iter_cycle[i][0],iter_cycle[i][1],iter_cycle[i][2],iter_cycle[i][3],
-                     iter_cycle[i][4],iter_cycle[i][5],iter_cycle[i][6],iter_cycle[i][7],
-                     iter_cycle[i][8]] = chisq_results[i]/dof
 
 
     if do_plot:
