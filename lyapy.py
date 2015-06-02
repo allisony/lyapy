@@ -19,15 +19,10 @@ e=4.8032e-10            # electron charge in esu
 mp=1.6726231e-24        # proton mass in grams
 me=mp/1836.             # electron mass in grams
 
-data_to_fit_fromfile = np.loadtxt('data_to_fit.savepy')
-wave_to_fit_fromfile = data_to_fit_fromfile[0,:]
-flux_norm_to_fit_fromfile = data_to_fit_fromfile[1,:]
-error_norm_to_fit_fromfile = data_to_fit_fromfile[2,:]
-#resolution_array_fromfile = np.loadtxt('resolution.savepy')
-#resolution_fromfile = resolution_array_fromfile[0]
-#mask_fromfile = np.loadtxt('mask.savepy')
-tau_tot_ism_grid_fromfile = pyfits.getdata('tau_tot_ism_grid.fits')
-lya_intrinsic_profile_grid_fromfile = pyfits.getdata('lya_intrinsic_profile_grid.fits')
+data_to_fit_filename = '/Volumes/Storage/Lya_reconstruction/lyapy/lyapy/data_to_fit.savepy'
+tau_tot_ism_grid_filename = '/Volumes/Storage/Lya_reconstruction/lyapy/lyapy/tau_tot_ism_grid.fits'
+lya_intrinsic_profile_grid_filename = '/Volumes/Storage/Lya_reconstruction/lyapy/lyapy/lya_intrinsic_profile_grid.fits'
+
 
 from matplotlib import rc
 rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
@@ -190,13 +185,14 @@ def EUV_spectrum(total_Lya_flux,distance_to_target,starname,
       ax.text(0.97,0.85,'[erg/s]',verticalalignment='top',horizontalalignment='right',
               transform=ax.transAxes,fontsize=12., color='black')
 
+      outfile_str = starname + '_EUV_spectrum.png'
+      plt.savefig(outfile_str)
+
     if savefile:
       ## Writing EUV flux array to txt file
-      dat = np.array([EUV_wavelength_array,EUV_flux_array])
-      dat_new = np.transpose(dat)
-      comment_str = 'Wavelength in Angstroms and EUV flux in erg/s/cm^2/AA'
+      #comment_str = 'Wavelength in Angstroms and EUV flux in erg/s/cm^2/AA'
       outfile_str = starname + '_EUV_spectrum.txt'
-      np.savetxt(outfile_str,dat_new,header=comment_str)
+      np.savetxt(outfile_str,np.transpose([EUV_wavelength_array,EUV_flux_array,0.25*EUV_flux_array]))#,header=comment_str)
 
     return EUV_wavelength_array,EUV_flux_array,EUV_luminosity
 
@@ -363,7 +359,7 @@ def damped_lya_fitter(multisingle='multi'):
                         (True,False),(True,False),(True,True),(True,True),
                         (False,False),(True,True),(True,False)], 
             parlimits=[(14.4,14.6), (1e-16,0), (50.,0),(0,0), (1e-16,0),(50.,0),
-                       (17.0,19.5), (5.,20.), (0,0),(1.3e-5,1.7e-5),(10000.,0)])
+                       (17.0,19.5), (5.,20.), (0,0),(1.0e-5,2.5e-5),(10000.,0)])
     myclass.__name__ = "damped_lya"
     
     return myclass
@@ -372,6 +368,9 @@ def tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,resolution,
                    mask,save_file=True):
 
     fw = lya_rest/resolution
+
+    data_to_fit_fromfile = np.loadtxt(data_to_fit_filename)
+    wave_to_fit_fromfile = data_to_fit_fromfile[0,:]
 
     kernel = make_kernel(grid=wave_to_fit_fromfile,fwhm=fw)  
 
@@ -382,9 +381,9 @@ def tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,resolution,
     tau_tot_ism_grid = np.zeros([len(h1_col_range),len(h1_b_range),len(h1_vel_range),
                                                  len(tau_tot_ism_test_convolved)])
     for a in range(len(h1_col_range)):
-      print '*** a = ' + str(a) + ' of ' + str(len(h1_col_range)-1) + ' ***' 
+      print '*** a (h1_col) = ' + str(a) + ' of ' + str(len(h1_col_range)-1) + ' ***' 
       for b in range(len(h1_b_range)):
-        print 'b = ' + str(b) + ' of ' + str(len(h1_b_range)-1)
+        print 'b (h1_b) = ' + str(b) + ' of ' + str(len(h1_b_range)-1)
         for c in range(len(h1_vel_range)):
       
           tot_ism = total_tau_profile_func(wave_to_fit,h1_col_range[a],
@@ -405,6 +404,9 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
 
     fw = lya_rest/resolution
 
+    data_to_fit_fromfile = np.loadtxt(data_to_fit_filename)
+    wave_to_fit_fromfile = data_to_fit_fromfile[0,:]
+
     kernel = make_kernel(grid=wave_to_fit_fromfile,fwhm=fw)  
 
 
@@ -420,9 +422,9 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
                                            len(lya_intrinsic_profile_test_convolved)])
 
     for a in range(len(vs_n_range)):
-      print '*** a = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
+      print '*** a (vs_n) = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
       for b in range(len(am_n_range)):
-        print 'b = ' + str(b) + ' of ' + str(len(am_n_range)-1)
+        print 'b (am_n) = ' + str(b) + ' of ' + str(len(am_n_range)-1)
         for c in range(len(fw_n_range)):
 
           for d in range(len(vs_b_range)):
@@ -449,11 +451,18 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
     return
 
 def brute_force_gridsearch(vs_n_range,am_n_range,fw_n_range,vs_b_range,am_b_range,
-                           fw_b_range,h1_col_range,h1_b_range,h1_vel_range):
+                           fw_b_range,h1_col_range,h1_b_range,h1_vel_range,mask):
 
     big_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
                                len(vs_b_range),len(am_b_range),len(fw_b_range),
                                len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
+
+    data_to_fit_fromfile = np.loadtxt(data_to_fit_filename)
+    wave_to_fit_fromfile = data_to_fit_fromfile[0,:]
+    flux_to_fit_fromfile = data_to_fit_fromfile[1,:]
+    error_to_fit_fromfile = data_to_fit_fromfile[2,:]
+    tau_tot_ism_grid_fromfile = pyfits.getdata(tau_tot_ism_grid_filename)
+    lya_intrinsic_profile_grid_fromfile = pyfits.getdata(lya_intrinsic_profile_grid_filename)
 
 
     for a in range(len(vs_n_range)):
@@ -479,9 +488,12 @@ def brute_force_gridsearch(vs_n_range,am_n_range,fw_n_range,vs_b_range,am_b_rang
                       lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
     
                       lyman_fit = lya_total * tau_tot_ism
-
-                      chisq = np.sum( ( (flux_norm_to_fit_fromfile - lyman_fit) / 
-                                         error_norm_to_fit_fromfile )**2 )
+                      if mask.sum() != 0:
+                        chisq = np.sum( ( (flux_to_fit_fromfile[~mask] - lyman_fit[~mask]) / 
+                                         error_to_fit_fromfile[~mask] )**2 )
+                      else:
+                        chisq = np.sum ( ( (flux_to_fit_fromfile - lyman_fit) /
+                                         error_to_fit_fromfile )**2 )
 
                       big_chisq_grid[a,b,c,d,e,f,g,h,i] = chisq
 
@@ -493,20 +505,20 @@ def multi_run_wrapper(args):
 
     return damped_lya_profile_gridsearch(*args)
 
-def damped_lya_profile_gridsearch(a,b,c,d,e,f,g,h,i):
-    ## Narrow + Broad Ly-alpha ##
+#def damped_lya_profile_gridsearch(a,b,c,d,e,f,g,h,i):
+#    ## Narrow + Broad Ly-alpha ##
     
     ###################################
 
-    tau_tot_ism = tau_tot_ism_grid_fromfile[g,h,i,:]
-
-    lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
-    
-    lyman_fit = lya_total * tau_tot_ism
-
-    chisq = np.sum( ( (flux_norm_to_fit_fromfile - lyman_fit) / error_norm_to_fit_fromfile )**2 )
-
-    return chisq
+#    tau_tot_ism = tau_tot_ism_grid_fromfile[g,h,i,:]
+#
+#    lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
+#    
+#    lyman_fit = lya_total * tau_tot_ism
+#
+#    chisq = np.sum( ( (flux_to_fit_fromfile - lyman_fit) / error_to_fit_fromfile )**2 )
+#
+#    return chisq
 
 
 def delta_chi2(df,probability_of_exceeding):
@@ -621,7 +633,7 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
     # defining max of y axis 
     y_max = np.max(flux_to_fit)
     y_min = np.min(flux_to_fit)
-    ax.set_ylim([y_min,y_max])
+    ax.set_ylim([y_min,y_max*1.05])
     ax.set_xlim( [np.min(wave_to_fit),np.max(wave_to_fit)] )
     plt.ticklabel_format(useOffset=False)
 
@@ -720,7 +732,8 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
     ax.plot(wave_to_fit,model_best_fit,'deeppink',linewidth=1.5)
     ax.plot(wave_to_fit,lya_profile_intrinsic,'b--',linewidth=1.3)
     if continue_parameter == 'yes':
-      ax.step(wave_to_fit[mask],flux_to_fit[mask],'lightblue',linewidth=0.8)
+      mask2 = (pixel_array >= mask_lower_limit-1) & (pixel_array <= mask_upper_limit+1)
+      ax.step(wave_to_fit[mask2],flux_to_fit[mask2],'lightblue',linewidth=0.8)
     ax.set_ylabel(r'Flux ' r'(erg s$^{-1}$ cm$^{-2}$ \AA$^{-1}$)',fontsize=14)
     ax.set_xlabel(r'Wavelength (\AA)',fontsize=14)
     ax.set_title(spec_header['STAR'] + ' spectrum with best fit parameters',fontsize=16)
@@ -728,7 +741,7 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
     # defining max of y axis 
     y_max = np.max( np.array( [np.max(flux_to_fit),np.max(model_best_fit)] ) )
     y_min = np.min(flux_to_fit)
-    ax.set_ylim([y_min,y_max])
+    ax.set_ylim([y_min,y_max*1.05])
     ax.set_xlim( [np.min(wave_to_fit),np.max(wave_to_fit)] )
     plt.ticklabel_format(useOffset=False)
 
@@ -778,11 +791,18 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
     if save_figure:
       outfile_str = input_filename.replace('.fits','_finalfit.png')
       plt.savefig(outfile_str)
+      deltalam = wave_to_fit[1] - wave_to_fit[0]
+      wave_to_fit_extended = np.arange(1208.,1222.,deltalam)
+      lya_profile_intrinsic_extended = lya_intrinsic_profile_func(wave_to_fit_extended,vs_n_final,
+                    am_n_final,fw_n_final,vs_b_final,am_b_final,fw_b_final)
+      outfile_str2 = input_filename.replace('.fits','_intrinsic_lya_profile.txt')
+      np.savetxt(outfile_str2,np.transpose([wave_to_fit_extended,lya_profile_intrinsic_extended,
+                                             0.25*lya_profile_intrinsic_extended]))
 
     return
 
 
-def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True,brute_force=False):
+def LyA_gridsearch(input_filename,parameter_range,num_cores,brute_force=False):
 
     ## Read in fits file ##
     spec_hdu = pyfits.open(input_filename)
@@ -798,10 +818,6 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True,brute_f
     rms_wing = np.std(flux_to_fit[np.where((wave_to_fit > np.min(wave_to_fit)) & 
                                                         (wave_to_fit < 1214.5))])
     error_to_fit[np.where(error_to_fit < rms_wing)] = rms_wing
-
-
-    norm_const = np.max(flux_to_fit)
-    flux_norm_to_fit = flux_to_fit/norm_const
 
 
     plt.ion()
@@ -854,25 +870,23 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True,brute_f
 
 
     ## write a text file with wave_to_fit,flux_norm_to_fit,hwave_all,resolution,mask
-    flux_norm_to_fit_copy = flux_norm_to_fit.copy()
-    if mask.sum() != 0:
-      flux_norm_to_fit_copy[mask] = 0
-    np.savetxt('data_to_fit.savepy',np.array([wave_to_fit,flux_norm_to_fit_copy,
-               error_to_fit/norm_const]))
+    np.savetxt('data_to_fit.savepy',np.array([wave_to_fit,flux_to_fit,
+               error_to_fit]))
     np.savetxt('resolution.savepy',np.array([resolution,0]))
     np.savetxt('mask.savepy',mask)
 
     # Degrees of Freedom = (# bins) - 1 - (# parameters) -- needs to be edited for masking
     if mask.sum() != 0: 
-      dof = len(flux_norm_to_fit[~mask]) - len(parameter_range)
+      dof = len(flux_to_fit[~mask]) - len(parameter_range)
     else:
-      dof = len(flux_norm_to_fit) - len(parameter_range)
+      dof = len(flux_to_fit) - len(parameter_range)
 
 
     if brute_force:
 
-      big_reduced_chisq_grid = brute_force_gridsearch(vs_n_range,am_n_range,fw_n_range,vs_b_range,
-                               am_b_range,fw_b_range,h1_col_range,h1_b_range,h1_vel_range)/dof
+      big_reduced_chisq_grid = brute_force_gridsearch(vs_n_range,am_n_range,
+                               fw_n_range,vs_b_range,am_b_range,fw_b_range,
+                               h1_col_range,h1_b_range,h1_vel_range,mask)/dof
 
     else:
       iter_cycle = np.transpose(zip(*itertools.product(range(len(vs_n_range)),
@@ -887,7 +901,6 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True,brute_f
       print "Finished Multiprocessing"
       pool.close()
 
-      #### Confidence Intervals
       big_reduced_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
                                len(vs_b_range),len(am_b_range),len(fw_b_range),
                                len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
@@ -897,124 +910,15 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,do_plot=True,brute_f
                      iter_cycle[i][6],iter_cycle[i][7],
                      iter_cycle[i][8]] = chisq_results[i]/dof
 
-    reduced_chisq_minimum = np.min(big_reduced_chisq_grid)/dof
-
-    import pdb; pdb.set_trace()
-
-    ## Best fit parameters
-    best_fit_indices = np.where( big_reduced_chisq_grid == np.min(big_reduced_chisq_grid) )
-    vs_n_final = vs_n_range[best_fit_indices[0]]
-    am_n_final = am_n_range[best_fit_indices[1]]*norm_const
-    fw_n_final = fw_n_range[best_fit_indices[2]]
-    vs_b_final = vs_b_range[best_fit_indices[3]]
-    am_b_final = am_b_range[best_fit_indices[4]]*norm_const
-    fw_b_final = fw_b_range[best_fit_indices[5]]
-    h1_col_final = h1_col_range[best_fit_indices[6]]
-    h1_b_final = h1_b_range[best_fit_indices[7]]
-    h1_vel_final = h1_vel_range[best_fit_indices[8]]
-
-    ## Reconstructing intrinsic LyA flux
-    model_best_fit = damped_lya_profile(wave_to_fit,vs_n_final,am_n_final,fw_n_final,
-                                          vs_b_final,am_b_final,fw_b_final,h1_col_final,
-                                          h1_b_final,h1_vel_final,1.5e-5,resolution)/1e14
-
-    lya_intrinsic_profile,lya_intrinsic_flux = lya_intrinsic_profile_func(wave_to_fit,
-         vs_n_final,am_n_final,fw_n_final,vs_b_final,am_b_final,fw_b_final,return_flux=True)
-    ##########################################
-
-
-
-    ## Print best fit parameters
-    print ' '
-    print 'BEST FIT PARAMETERS'
-    print 'Reduced Chi-square = ' + str(reduced_chisq_minimum)
-    print 'vs_n = ' + str(vs_n_final)
-    print 'am_n = ' + str(am_n_final)
-    print 'fw_n = ' + str(fw_n_final)
-    print 'vs_b = ' + str(vs_b_final)
-    print 'am_b = ' + str(am_b_final)
-    print 'fw_b = ' + str(fw_b_final)
-    print 'h1_col = ' + str(h1_col_final)
-    print 'h1_b = ' + str(h1_b_final)
-    print 'h1_vel = ' + str(h1_vel_final)
-    print 'Total LyA Flux = ' + str(lya_intrinsic_flux) + ' erg/s/cm^2'
-
-
-
-
-
-    if do_plot:
-      ### MAKING FINAL LYA FIT PLOT ############
-
-
-      f = plt.figure()
-      plt.rc('text', usetex=True)
-      plt.rc('font', family='serif', size=14)
-      ax = f.add_subplot(111)
-      ax.step(wave_to_fit,flux_norm_to_fit*norm_const,'k')
-      short_wave = np.linspace(wave_to_fit[0],wave_to_fit[-1],25)
-      error_bars_short = np.interp(short_wave,wave_to_fit,error_to_fit)
-      short_flux = np.interp(short_wave,wave_to_fit,flux_norm_to_fit*norm_const)
-      ax.errorbar(short_wave,short_flux,yerr=error_bars_short,fmt=None,ecolor='limegreen',elinewidth=3,capthick=3)
-      ax.plot(wave_to_fit,model_best_fit,'deeppink',linewidth=1.5)
-      ax.plot(wave_to_fit,lya_intrinsic_profile,'b--',linewidth=1.3)
-      ax.set_ylabel(r'Flux ' r'(erg s$^{-1}$ cm$^{-2}$ \AA$^{-1}$)',fontsize=14)
-      ax.set_xlabel(r'Wavelength (\AA)',fontsize=14)
-      ax.set_title(spec_header['STAR'] + ' spectrum with best fit parameters',fontsize=16)
-
-      # defining max of y axis 
-      y_max = np.max( np.array( [np.max(flux_norm_to_fit*norm_const),np.max(model_best_fit)] ) )
-      y_min = 0.0
-      ax.set_ylim([y_min,y_max])
-      ax.set_xlim( [np.min(wave_to_fit),np.max(wave_to_fit)] )
-      plt.ticklabel_format(useOffset=False)
-
-      vs_n_err,am_n_err,fw_n_err,vs_b_err,am_b_err,fw_b_err,h1_col_err,h1_b_err,h1_vel_err=0,0,0,0,0,0,0,0,0
-
-      # Inserting text
-      ax.text(0.03,0.97,'vs\_n = '+str(round(vs_n_final,2))+' $\pm$ '+str(round(vs_n_err,2)),
-        verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,
-        fontsize=12., color='black')
-      ax.text(0.03,0.93,'am\_n = '+"{:.2E}".format(am_n_final)+' $\pm$  '+
-        "{:.2E}".format(am_n_err),verticalalignment='top',horizontalalignment='left',
-        transform=ax.transAxes,fontsize=12., color='black')
-      ax.text(0.03,0.89,'fw\_n = '+str(round(fw_n_final,2))+' $\pm$  '+str(round(fw_n_err,2)),
-        verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
-        color='black')
-      ax.text(0.03,0.85,'vs\_b = '+str(round(vs_b_final,2))+' $\pm$  '+str(round(vs_b_err,2)),
-        verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
-        color='black')
-      ax.text(0.03,0.81,'am\_b = '+"{:.2E}".format(am_b_final)+' $\pm$  '+
-        "{:.2E}".format(am_b_final),verticalalignment='top',horizontalalignment='left',
-        transform=ax.transAxes,fontsize=12., color='black')
-      ax.text(0.03,0.77,'fw\_b = '+str(round(fw_b_final,2))+' $\pm$  '+str(round(fw_b_err,2)),
-        verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
-        color='black')
-      ax.text(0.03,0.73,'h1\_col = '+str(round(h1_col_final,3))+' $\pm$  '+
-        str(round(h1_col_err,3)),verticalalignment='top',horizontalalignment='left',
-        transform=ax.transAxes,fontsize=12., color='black')
-      ax.text(0.03,0.69,'h1\_b = '+str(round(h1_b_final,2))+' $\pm$  '+str(round(h1_b_err,2)),
-        verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12., 
-        color='black')
-      ax.text(0.03,0.65,'h1\_vel = '+str(round(h1_vel_final,2))+' $\pm$  '+
-        str(round(h1_vel_err,2)),verticalalignment='top',horizontalalignment='left',
-        transform=ax.transAxes,fontsize=12., color='black')
-      #ax.text(0.03,0.61,'d2h = '+"{:.2E}".format(d2h_final)+' $\pm$  '+"{:.2E}".format(d2h_err),
-  #      verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
-  #      color='black')
-
-      ax.text(0.97,0.97,r'Ly$\alpha$ flux = '+"{:.2E}".format(lya_intrinsic_flux),
-        verticalalignment='top',horizontalalignment='right',transform=ax.transAxes,fontsize=12.,
-        color='black')
-      ax.text(0.97,0.93,'[erg/s/cm2]',verticalalignment='top',horizontalalignment='right',
-        transform=ax.transAxes,fontsize=12., color='black')
-      ax.text(0.97,0.89,r'$\chi^{2}_{\nu}$ = '+str(round(reduced_chisq_minimum,2)),verticalalignment='top', 
-        horizontalalignment='right',transform=ax.transAxes,fontsize=12., color='black')
 
     return big_reduced_chisq_grid
 
 
+def extract_error_bars_from_contours(cs):
 
+    p = cs.collections[0].get_paths()[0]
+    v = p.vertices
+    x = v[:,0]
+    y = v[:,1]
 
-
-
+    return [np.min(x),np.max(x),np.min(y),np.max(y)]
