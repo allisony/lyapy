@@ -31,6 +31,12 @@ rc('text', usetex=True)
 
 
 def geocoronal_subtraction(input_filename,resolution,starname,sub_geo=False):
+    """ From a high resolution spectrum, interactively and iteratively fit
+        a gaussian to the residual geocoronal emission and subtract it.  
+        Saves a cropped version of the resulting spectrum (wave, flux, error),
+        and in the header of the *_modAY.fits file, the star's name, spectral
+        resolution, and the original filename the spectrum came from. """
+        
     ## Editing spectrum! ##
 
     spec = pyfits.getdata(input_filename)
@@ -199,11 +205,21 @@ def EUV_spectrum(total_Lya_flux,distance_to_target,starname,
 
 def gaussian_flux(amplitude,sigma):
 
+    """ Computes the flux of a Gaussian given the amplitude and sigma. """
+
     flux = np.sqrt(2*np.pi) * sigma * amplitude
 
     return flux
 
-def lya_intrinsic_profile_func(x,vs_n,am_n,fw_n,vs_b,am_b,fw_b,return_flux=False):
+def lya_intrinsic_profile_func(x,vs_n,am_n,fw_n,vs_b=2.,am_b=2.,fw_b=2.,
+                               return_flux=False,single_component_flux=False):
+
+    """
+    Given a wavelength array and parameters (velocity centroid, amplitude, and FWHM)
+    of 2 Gaussians, computes the resulting intrinsic Lyman-alpha profile, and 
+    optionally returns the flux.  Can also choose only 1 Gaussian emission component.
+
+    """
 
     ## Narrow Ly-alpha ##
 
@@ -226,11 +242,25 @@ def lya_intrinsic_profile_func(x,vs_n,am_n,fw_n,vs_b,am_b,fw_b,return_flux=False
     lya_flux_broad = gaussian_flux(am_b,sig_b)
     
     if return_flux:
-      return lya_profile_narrow+lya_profile_broad,lya_flux_narrow+lya_flux_broad
+      if not single_component_flux:
+        return lya_profile_narrow+lya_profile_broad,lya_flux_narrow+lya_flux_broad
+      else:
+        return lya_profile_narrow,lya_flux_narrow
     else:
-      return lya_profile_narrow+lya_profile_broad
+      if not single_component_flux:
+        return lya_profile_narrow+lya_profile_broad
+      else:
+        return lya_profile_narrow
+
 
 def total_tau_profile_func(wave_to_fit,h1_col,h1_b,h1_vel,d2h=1.5e-5):
+
+    """
+    Given a wavelength array and parameters (H column density, b value, and 
+    velocity centroid), computes the Voigt profile of HI and DI Lyman-alpha
+    and returns the combined absorption profile.
+
+    """
 
     ##### ISM absorbers #####
 
@@ -259,11 +289,19 @@ def total_tau_profile_func(wave_to_fit,h1_col,h1_b,h1_vel,d2h=1.5e-5):
     return tot_ism
 
 def damped_lya_profile(wave_to_fit,vs_n,am_n,fw_n,vs_b,am_b,fw_b,h1_col,h1_b,
-                       h1_vel,d2h,resolution,return_components=False,
+                       h1_vel,d2h,resolution,single_component_flux=False,
+                       return_components=False,
                        return_hyperfine_components=False):
+
+    """
+    Computes a damped Lyman-alpha profile (by calling the functions
+    lya_intrinsic_profile_func and total_tau_profile_func) and convolves it 
+    to the proper resolution.
+
+    """
     
     lya_intrinsic_profile = lya_intrinsic_profile_func(wave_to_fit,vs_n,am_n,fw_n,
-                                                              vs_b,am_b,fw_b)
+                             vs_b,am_b,fw_b,single_component_flux=single_component_flux)
     total_tau_profile = total_tau_profile_func(wave_to_fit,h1_col,h1_b,h1_vel,d2h)
 
     lya_obs_high = lya_intrinsic_profile * total_tau_profile
@@ -276,6 +314,11 @@ def damped_lya_profile(wave_to_fit,vs_n,am_n,fw_n,vs_b,am_b,fw_b,h1_col,h1_b,
     return lyman_fit*1e14
 
 def make_kernel(grid,fwhm):
+
+    """
+    Creates a kernel used for convolution to a certain resolution.
+
+    """
 
     nfwhm = 4.  ## No idea what this parameter is
     ngrd    = len(grid)
@@ -293,6 +336,12 @@ def make_kernel(grid,fwhm):
     return kernel_norm
 
 def tau_profile(ncols,vshifts,vdop,h1_or_d1):
+
+    """ 
+    Computes a Lyman-alpha Voigt profile for HI or DI given column density,
+    velocity centroid, and b parameter.
+
+    """
 
     ## defining rest wavelength, oscillator strength, and damping parameter
     if h1_or_d1 == 'h1':
@@ -349,8 +398,10 @@ def tau_profile(ncols,vshifts,vdop,h1_or_d1):
     return wave_all,tau_all
 
 def damped_lya_fitter(multisingle='multi'):
+
     """
     Generator for Damped LyA fitter class
+
     """
     myclass =  pyspeckit.models.model.SpectralModel(damped_lya_profile,11,
             parnames=['vs_n','am_n','fw_n','vs_b','am_b','fw_b','h1_col',
@@ -400,7 +451,8 @@ def tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,resolution,
     return
 
 def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_range,
-                             am_b_range,fw_b_range,resolution,mask,save_file=True):
+                             am_b_range,fw_b_range,resolution,mask,
+                             single_component_flux=False,save_file=True):
 
     fw = lya_rest/resolution
 
@@ -409,39 +461,69 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
 
     kernel = make_kernel(grid=wave_to_fit_fromfile,fwhm=fw)  
 
-
-    lya_intrinsic_profile_test = lya_intrinsic_profile_func(wave_to_fit,vs_n_range[0],
-                                           am_n_range[0],fw_n_range[0],vs_b_range[0],
-                                           am_b_range[0],fw_b_range[0])
-    lya_intrinsic_profile_test_convolved = np.convolve(lya_intrinsic_profile_test,
+    if not single_component_flux:
+      lya_intrinsic_profile_test = lya_intrinsic_profile_func(wave_to_fit,vs_n_range[0],
+                                 am_n_range[0],fw_n_range[0],vs_b_range[0],
+                                 am_b_range[0],fw_b_range[0],
+                                 single_component_flux=single_component_flux)
+      lya_intrinsic_profile_test_convolved = np.convolve(lya_intrinsic_profile_test,
                                            kernel,mode='same')
 
-    lya_intrinsic_profile_grid = np.zeros([len(vs_n_range),len(am_n_range),
+      lya_intrinsic_profile_grid = np.zeros([len(vs_n_range),len(am_n_range),
                                            len(fw_n_range),len(vs_b_range),
                                            len(am_b_range),len(fw_b_range),
                                            len(lya_intrinsic_profile_test_convolved)])
+    else:
+      lya_intrinsic_profile_test = lya_intrinsic_profile_func(wave_to_fit,vs_n_range[0],
+                                 am_n_range[0],fw_n_range[0],
+                                 single_component_flux=single_component_flux)
+      lya_intrinsic_profile_test_convolved = np.convolve(lya_intrinsic_profile_test,
+                                           kernel,mode='same')
+      lya_intrinsic_profile_grid = np.zeros([len(vs_n_range),len(am_n_range),
+                                           len(fw_n_range),         
+                                           len(lya_intrinsic_profile_test_convolved)])
 
-    for a in range(len(vs_n_range)):
-      print '*** a (vs_n) = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
-      for b in range(len(am_n_range)):
-        print 'b (am_n) = ' + str(b) + ' of ' + str(len(am_n_range)-1)
-        for c in range(len(fw_n_range)):
+    if not single_component_flux:
+      for a in range(len(vs_n_range)):
+        print '*** a (vs_n) = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
+        for b in range(len(am_n_range)):
+          print 'b (am_n) = ' + str(b) + ' of ' + str(len(am_n_range)-1)
+          for c in range(len(fw_n_range)):
 
-          for d in range(len(vs_b_range)):
+            for d in range(len(vs_b_range)):
    
-            for e in range(len(am_b_range)):
+              for e in range(len(am_b_range)):
 
-              for f in range(len(fw_b_range)):
+                for f in range(len(fw_b_range)):
       
-                lya_intrinsic_profile = lya_intrinsic_profile_func(wave_to_fit,
+                  lya_intrinsic_profile = lya_intrinsic_profile_func(wave_to_fit,
                                             vs_n_range[a],am_n_range[b],fw_n_range[c],
-                                            vs_b_range[d],am_b_range[e],fw_b_range[f])
-                lya_intrinsic_profile_convolved = np.convolve(lya_intrinsic_profile,
+                                            vs_b_range[d],am_b_range[e],fw_b_range[f],
+                                            single_component_flux=single_component_flux)
+                  lya_intrinsic_profile_convolved = np.convolve(lya_intrinsic_profile,
                                                                  kernel,mode='same')
-                if mask.sum() != 0:
-                  lya_intrinsic_profile_convolved[mask] = 0
+                  if mask.sum() != 0:
+                    lya_intrinsic_profile_convolved[mask] = 0
 
-                lya_intrinsic_profile_grid[a,b,c,d,e,f,:] = lya_intrinsic_profile_convolved
+                  lya_intrinsic_profile_grid[a,b,c,d,e,f,:] = lya_intrinsic_profile_convolved
+
+    else:
+      for a in range(len(vs_n_range)):
+        print '*** a (vs_n) = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
+        for b in range(len(am_n_range)):
+          print 'b (am_n) = ' + str(b) + ' of ' + str(len(am_n_range)-1)
+          for c in range(len(fw_n_range)):
+      
+                  lya_intrinsic_profile = lya_intrinsic_profile_func(wave_to_fit,
+                                            vs_n_range[a],am_n_range[b],fw_n_range[c],
+                                            single_component_flux=single_component_flux)
+                  lya_intrinsic_profile_convolved = np.convolve(lya_intrinsic_profile,
+                                                                 kernel,mode='same')
+                  if mask.sum() != 0:
+                    lya_intrinsic_profile_convolved[mask] = 0
+
+                  lya_intrinsic_profile_grid[a,b,c,:] = lya_intrinsic_profile_convolved
+
 
     
     if save_file:
@@ -451,11 +533,17 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
     return
 
 def brute_force_gridsearch(vs_n_range,am_n_range,fw_n_range,vs_b_range,am_b_range,
-                           fw_b_range,h1_col_range,h1_b_range,h1_vel_range,mask):
+                           fw_b_range,h1_col_range,h1_b_range,h1_vel_range,mask,
+                           single_component_flux=False):
 
-    big_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
+    if not single_component_flux:
+      big_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
                                len(vs_b_range),len(am_b_range),len(fw_b_range),
                                len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
+    else:
+      big_chisq_grid = np.zeros([len(vs_n_range),len(am_n_range),len(fw_n_range),
+                                 len(h1_col_range),len(h1_b_range),len(h1_vel_range)])
+
 
     data_to_fit_fromfile = np.loadtxt(data_to_fit_filename)
     wave_to_fit_fromfile = data_to_fit_fromfile[0,:]
@@ -464,38 +552,65 @@ def brute_force_gridsearch(vs_n_range,am_n_range,fw_n_range,vs_b_range,am_b_rang
     tau_tot_ism_grid_fromfile = pyfits.getdata(tau_tot_ism_grid_filename)
     lya_intrinsic_profile_grid_fromfile = pyfits.getdata(lya_intrinsic_profile_grid_filename)
 
+    if not single_component_flux:
+      for a in range(len(vs_n_range)):
+        print '*** a = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
+        for b in range(len(am_n_range)):
+          print 'b = ' + str(b) + ' of ' + str(len(am_n_range)-1)
+          for c in range(len(fw_n_range)):
+            print 'c = ' + str(c) + ' of ' + str(len(fw_n_range)-1)
+            for d in range(len(vs_b_range)):
 
-    for a in range(len(vs_n_range)):
-      print '*** a = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
-      for b in range(len(am_n_range)):
-        print 'b = ' + str(b) + ' of ' + str(len(am_n_range)-1)
-        for c in range(len(fw_n_range)):
-          print 'c = ' + str(c) + ' of ' + str(len(fw_n_range)-1)
-          for d in range(len(vs_b_range)):
+              for e in range(len(am_b_range)):
 
-            for e in range(len(am_b_range)):
+                for f in range(len(fw_b_range)):
 
-              for f in range(len(fw_b_range)):
+                  for g in range(len(h1_col_range)):
 
-                for g in range(len(h1_col_range)):
+                    for h in range(len(h1_b_range)):
 
-                  for h in range(len(h1_b_range)):
+                      for i in range(len(h1_vel_range)):
 
-                    for i in range(len(h1_vel_range)):
+                        tau_tot_ism = tau_tot_ism_grid_fromfile[g,h,i,:]
 
-                      tau_tot_ism = tau_tot_ism_grid_fromfile[g,h,i,:]
-
-                      lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
+                        lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
     
-                      lyman_fit = lya_total * tau_tot_ism
-                      if mask.sum() != 0:
-                        chisq = np.sum( ( (flux_to_fit_fromfile[~mask] - lyman_fit[~mask]) / 
+                        lyman_fit = lya_total * tau_tot_ism
+                        if mask.sum() != 0:
+                          chisq = np.sum( ( (flux_to_fit_fromfile[~mask] - lyman_fit[~mask]) / 
                                          error_to_fit_fromfile[~mask] )**2 )
-                      else:
-                        chisq = np.sum ( ( (flux_to_fit_fromfile - lyman_fit) /
+                        else:
+                          chisq = np.sum ( ( (flux_to_fit_fromfile - lyman_fit) /
                                          error_to_fit_fromfile )**2 )
 
-                      big_chisq_grid[a,b,c,d,e,f,g,h,i] = chisq
+                        big_chisq_grid[a,b,c,d,e,f,g,h,i] = chisq
+
+    else:
+      for a in range(len(vs_n_range)):
+        print '*** a = ' + str(a) + ' of ' + str(len(vs_n_range)-1) + ' ***' 
+        for b in range(len(am_n_range)):
+          print 'b = ' + str(b) + ' of ' + str(len(am_n_range)-1)
+          for c in range(len(fw_n_range)):
+                  for g in range(len(h1_col_range)):
+
+                    for h in range(len(h1_b_range)):
+
+                      for i in range(len(h1_vel_range)):
+
+                        tau_tot_ism = tau_tot_ism_grid_fromfile[g,h,i,:]
+
+                        lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,:]
+    
+                        lyman_fit = lya_total * tau_tot_ism
+                        if mask.sum() != 0:
+                          chisq = np.sum( ( (flux_to_fit_fromfile[~mask] - lyman_fit[~mask]) / 
+                                         error_to_fit_fromfile[~mask] )**2 )
+                        else:
+                          chisq = np.sum ( ( (flux_to_fit_fromfile - lyman_fit) /
+                                         error_to_fit_fromfile )**2 )
+
+                        big_chisq_grid[a,b,c,g,h,i] = chisq
+
 
     return big_chisq_grid
   
@@ -505,23 +620,16 @@ def multi_run_wrapper(args):
 
     return damped_lya_profile_gridsearch(*args)
 
-#def damped_lya_profile_gridsearch(a,b,c,d,e,f,g,h,i):
-#    ## Narrow + Broad Ly-alpha ##
-    
-    ###################################
-
-#    tau_tot_ism = tau_tot_ism_grid_fromfile[g,h,i,:]
-#
-#    lya_total = lya_intrinsic_profile_grid_fromfile[a,b,c,d,e,f,:]
-#    
-#    lyman_fit = lya_total * tau_tot_ism
-#
-#    chisq = np.sum( ( (flux_to_fit_fromfile - lyman_fit) / error_to_fit_fromfile )**2 )
-#
-#    return chisq
-
 
 def delta_chi2(df,probability_of_exceeding):
+
+    """
+    Computes the Delta-chi2 above the global minimum chi2 where
+    the probability of exceeding that chi2 value equals the
+    probability_of_exceeding parameter (in decimals, not percentage)
+    given the number of parameters (df).
+
+    """
 
     grid_size = 5000
     x = np.linspace(0,100,grid_size)
@@ -554,33 +662,21 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
     error_to_fit[np.where(error_to_fit < rms_wing)] = rms_wing
 
 
-    plt.ion()
-    ## MASK LOOP ## 
     mask_switch = raw_input("Mask line center (yes or no)? ")
     print ("you entered " + mask_switch)
-    continue_parameter = 'no'
-    while mask_switch == 'yes':
-      pixel_array = np.arange(len(flux_to_fit))
-      plt.figure()
-      plt.step(pixel_array,flux_to_fit)
-      mask_lower_limit_string = raw_input("Enter mask lower limit (in pixels): ")
-      mask_lower_limit = float(mask_lower_limit_string)
-      mask_upper_limit_string = raw_input("Enter mask upper limit (in pixels): ")
-      mask_upper_limit = float(mask_upper_limit_string)
-      mask = (pixel_array >= mask_lower_limit) & (pixel_array <= mask_upper_limit)
+    if mask_switch == 'yes':
+      mask = mask_spectrum(flux_to_fit)
       flux_to_fit_masked = np.ma.masked_where(mask,flux_to_fit)
-      plt.step(pixel_array,flux_to_fit_masked)
-      continue_parameter = raw_input("Happy? (yes or no]): ")
-      plt.close()
-
-      if continue_parameter == 'yes':
-        mask_switch = 'no'
-
-
-    ## END MASK LOOP ##
-
-    spec = pyspeckit.Spectrum(xarr=wave_to_fit,data=flux_to_fit_masked*1e14,
+      error_to_fit_masked = np.ma.masked_where(mask,error_to_fit)
+      spec = pyspeckit.Spectrum(xarr=wave_to_fit,data=flux_to_fit_masked*1e14,
                               error=error_to_fit*1e14,doplot=False,header=spec_header)
+
+    else:
+      mask = np.array([False])
+      spec = pyspeckit.Spectrum(xarr=wave_to_fit,data=flux_to_fit*1e14,
+                              error=error_to_fit*1e14,doplot=False,header=spec_header)
+
+
     spec.Registry.add_fitter('damped_lya',damped_lya_fitter(),11)
 
 
@@ -605,7 +701,8 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
                                         fw_b,h1_col,h1_b,h1_vel,d2h,resolution)/1e14
 
 
-    if continue_parameter == 'yes':
+
+    if mask.sum() != 0:
       chi2 = np.sum( ( (flux_to_fit[~mask] - initial_fit[~mask]) / error_to_fit[~mask] )**2 )
       dof = len(flux_to_fit[~mask]) - len(initial_parameters)
     else:
@@ -731,9 +828,8 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
                 fmt=None,ecolor='limegreen',elinewidth=3,capthick=3)
     ax.plot(wave_to_fit,model_best_fit,'deeppink',linewidth=1.5)
     ax.plot(wave_to_fit,lya_profile_intrinsic,'b--',linewidth=1.3)
-    if continue_parameter == 'yes':
-      mask2 = (pixel_array >= mask_lower_limit-1) & (pixel_array <= mask_upper_limit+1)
-      ax.step(wave_to_fit[mask2],flux_to_fit[mask2],'lightblue',linewidth=0.8)
+    if mask.sum() != 0:
+      ax.step(wave_to_fit[mask],flux_to_fit[mask],'lightblue',linewidth=0.8)
     ax.set_ylabel(r'Flux ' r'(erg s$^{-1}$ cm$^{-2}$ \AA$^{-1}$)',fontsize=14)
     ax.set_xlabel(r'Wavelength (\AA)',fontsize=14)
     ax.set_title(spec_header['STAR'] + ' spectrum with best fit parameters',fontsize=16)
@@ -802,7 +898,8 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
     return
 
 
-def LyA_gridsearch(input_filename,parameter_range,num_cores,brute_force=False):
+def LyA_gridsearch(input_filename,parameter_range,num_cores,
+                   brute_force=False,single_component_flux=False):
 
     ## Read in fits file ##
     spec_hdu = pyfits.open(input_filename)
@@ -820,30 +917,13 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,brute_force=False):
     error_to_fit[np.where(error_to_fit < rms_wing)] = rms_wing
 
 
-    plt.ion()
-    ## MASK LOOP ## 
     mask_switch = raw_input("Mask line center (yes or no)? ")
     print ("you entered " + mask_switch)
-    continue_parameter = 'no'
-    mask = np.array([False])
-    while mask_switch == 'yes':
-      pixel_array = np.arange(len(flux_to_fit))
-      plt.figure()
-      plt.step(pixel_array,flux_to_fit)
-      mask_lower_limit_string = raw_input("Enter mask lower limit (in pixels): ")
-      mask_lower_limit = float(mask_lower_limit_string)
-      mask_upper_limit_string = raw_input("Enter mask upper limit (in pixels): ")
-      mask_upper_limit = float(mask_upper_limit_string)
-      mask = (pixel_array >= mask_lower_limit) & (pixel_array <= mask_upper_limit)
-      flux_to_fit_masked = np.ma.masked_where(mask,flux_to_fit)
-      plt.step(pixel_array,flux_to_fit_masked)
-      continue_parameter = raw_input("Happy? (yes or no]): ")
-      plt.close()
-
-      if continue_parameter == 'yes':
-        mask_switch = 'no'
-
-    ## END MASK LOOP ##
+    if mask_switch == 'yes':
+      mask = mask_spectrum(flux_to_fit)
+    else:
+      mask = np.array([False])
+      
 
     print "Unpacking Initial Guess Parameters"
     
@@ -859,13 +939,16 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,brute_force=False):
     h1_col_range = parameter_range[6]
     h1_b_range   = parameter_range[7]
     h1_vel_range = parameter_range[8]
+ 
 
 
     tau_gridsearch(wave_to_fit,h1_col_range,h1_b_range,h1_vel_range,resolution,mask)
 
-
     intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_range,
-                                      am_b_range,fw_b_range,resolution,mask)
+                                      am_b_range,fw_b_range,resolution,mask,
+                                      single_component_flux=single_component_flux)
+ 
+
     ##################################
 
 
@@ -883,10 +966,10 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,brute_force=False):
 
 
     if brute_force:
-
       big_reduced_chisq_grid = brute_force_gridsearch(vs_n_range,am_n_range,
                                fw_n_range,vs_b_range,am_b_range,fw_b_range,
-                               h1_col_range,h1_b_range,h1_vel_range,mask)/dof
+                               h1_col_range,h1_b_range,h1_vel_range,mask,
+                               single_component_flux=single_component_flux)/dof
 
     else:
       iter_cycle = np.transpose(zip(*itertools.product(range(len(vs_n_range)),
@@ -910,11 +993,20 @@ def LyA_gridsearch(input_filename,parameter_range,num_cores,brute_force=False):
                      iter_cycle[i][6],iter_cycle[i][7],
                      iter_cycle[i][8]] = chisq_results[i]/dof
 
+    if mask.sum() != 0:
+      return big_reduced_chisq_grid, mask
 
-    return big_reduced_chisq_grid
+    else:
+      return big_reduced_chisq_grid
 
 
 def extract_error_bars_from_contours(cs):
+
+    """
+    Given a contour (cs) from matplotlib, finds the extrema in the
+    x and y orthogonal directions.
+
+    """
 
     p = cs.collections[0].get_paths()[0]
     v = p.vertices
@@ -922,3 +1014,31 @@ def extract_error_bars_from_contours(cs):
     y = v[:,1]
 
     return [np.min(x),np.max(x),np.min(y),np.max(y)]
+
+def mask_spectrum(flux_to_fit):
+
+    """
+    Interactively and iteratively creates a Boolean mask for a spectrum.
+
+    """
+    plt.ion()
+    continue_parameter = 'no'
+    mask_switch = 'yes'
+    while mask_switch == 'yes':
+      pixel_array = np.arange(len(flux_to_fit))
+      plt.figure()
+      plt.step(pixel_array,flux_to_fit)
+      mask_lower_limit_string = raw_input("Enter mask lower limit (in pixels): ")
+      mask_lower_limit = float(mask_lower_limit_string)
+      mask_upper_limit_string = raw_input("Enter mask upper limit (in pixels): ")
+      mask_upper_limit = float(mask_upper_limit_string)
+      mask = (pixel_array >= mask_lower_limit) & (pixel_array <= mask_upper_limit)
+      flux_to_fit_masked = np.ma.masked_where(mask,flux_to_fit)
+      plt.step(pixel_array,flux_to_fit_masked)
+      continue_parameter = raw_input("Happy? (yes or no]): ")
+      plt.close()
+
+      if continue_parameter == 'yes':
+        mask_switch = 'no'
+
+    return mask

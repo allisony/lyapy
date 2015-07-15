@@ -39,38 +39,6 @@ fw_n_dict = {
          'error_plus': 0
             }
 
-vs_b_dict = {
-         'name': 'vs_b',
-         'latex_name': 'v$_b$',
-         'range': vs_b_range,
-         'increments': MultipleLocator((vs_b_range[-1]-vs_b_range[0])/2.),
-         'doplot': True,
-         'index': 3,
-         'error_minus': 0,
-         'error_plus': 0
-            }
-
-am_b_dict = {
-         'name': 'am_b',
-         'latex_name': 'A$_b$',
-         'range': am_b_range,
-         'increments': MultipleLocator((am_b_range[-1]-am_b_range[0])/2.),
-         'doplot': True,
-         'index': 4,
-         'error_minus': 0,
-         'error_plus': 0
-            }
-
-fw_b_dict = {
-         'name': 'fw_b',
-         'latex_name': 'FW$_b$',
-         'range': fw_b_range,
-         'increments': MultipleLocator((fw_b_range[-1]-fw_b_range[0])/2.),
-         'doplot': True,
-         'index': 5,
-         'error_minus': 0,
-         'error_plus': 0
-            }
 
 h1_col_dict = {
          'name': 'h1_col',
@@ -78,7 +46,7 @@ h1_col_dict = {
          'range': h1_col_range,
          'increments': MultipleLocator((h1_col_range[-1]-h1_col_range[0])/2.),
          'doplot': True,
-         'index': 6,
+         'index': 3,
          'error_minus': 0,
          'error_plus': 0
             }
@@ -89,7 +57,7 @@ h1_b_dict = {
          'range': h1_b_range,
          'increments': MultipleLocator((h1_b_range[-1]-h1_b_range[0])/2.),
          'doplot': True,
-         'index': 7,
+         'index': 4,
          'error_minus': 0,
          'error_plus': 0
             }
@@ -100,12 +68,12 @@ h1_vel_dict = {
          'range': h1_vel_range,
          'increments': MultipleLocator((h1_vel_range[-1]-h1_vel_range[0])/2.),
          'doplot': True,
-         'index': 8,
+         'index': 5,
          'error_minus': 0,
          'error_plus': 0
             }
 
-parameter_dictionaries = [vs_n_dict,am_n_dict,fw_n_dict,vs_b_dict,am_b_dict,fw_b_dict,
+parameter_dictionaries = [vs_n_dict,am_n_dict,fw_n_dict,
                           h1_col_dict,h1_b_dict,h1_vel_dict]
 
 
@@ -122,11 +90,12 @@ for i in range(len(parameter_dictionaries)):
 cmap='Greys_r'
 
 
+figtext(0.5,0.93,spec_header['STAR'],fontdict={'fontsize':18})
+
+
+
 
 f = figure()
-
-#figtext(0.5,0.93,spec_header['STAR'],fontdict={'fontsize':18})
-
 
 ## nested for loop using the dictionaries' index numbers
 
@@ -140,9 +109,8 @@ for i in range(num_free_parameters-1):
   for j in range(num_free_parameters - 1 - i):
     grid_indices = [best_fit_indices[0][0],best_fit_indices[1][0],
                     best_fit_indices[2][0],best_fit_indices[3][0],
-                    best_fit_indices[4][0],best_fit_indices[5][0],
-                    best_fit_indices[6][0],best_fit_indices[7][0],
-                    best_fit_indices[8][0]]
+                    best_fit_indices[4][0],best_fit_indices[5][0]]
+                   
     print "subplot #" + str(subplot_number)
     ax = subplot(num_free_parameters-1,num_free_parameters-1,subplot_number)
     subplot_number += (num_free_parameters - 1)
@@ -161,8 +129,6 @@ for i in range(num_free_parameters-1):
                     levels=contour_levels,extent=extent)
     ax.plot(horiz_axis_parm_dict['range'][best_fit_indices[i][0]],
             vert_axis_parm_dict['range'][best_fit_indices[j+i+1]],'wx')
-
-
     if j == np.max(range(num_free_parameters - 1 - i)):
       ax.set_xlabel(horiz_axis_parm_dict['latex_name'])
       ax.xaxis.set_major_locator( horiz_axis_parm_dict['increments'] )
@@ -201,7 +167,7 @@ for dic in parameter_dictionaries:
   dic['error_plus'] -= dic['range'][best_fit_indices[dic['index']][0]]
 
 
-do_plot=False
+do_plot=True
 
 if do_plot:
       ### MAKING FINAL LYA FIT PLOT ############
@@ -244,24 +210,13 @@ verticalalignment='top',horizontalalignment='left',
       ax.text(0.03,0.85,'FW$_n$ = '+ str(round(fw_n_final,2)) + '$^{+' + str(round(fw_n_dict['error_plus'],0)) + '}_{-' + str(round(fw_n_dict['error_minus'],0)) + '}$',
         verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
         color='black')
-      ax.text(0.03,0.79,'V$_b$ = '+ str(round(vs_b_final,2)) + '$^{+' + str(round(vs_b_dict['error_plus'],1)) + '}_{-' + str(round(vs_b_dict['error_minus'],1)) + '}$',
-        verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
-        color='black')
-
-      ax.text(0.03,0.73,'A$_b$ = ('+ str(round(am_b_final/am_n_exponent,2)) + '$^{+' + str(round(am_b_dict['error_plus']/am_n_exponent,3)) + '}_{-' + str(round(am_b_dict['error_minus']/am_n_exponent,3)) + '}$) ' + r'$\times$'+ ' 10$^{' + str(exponent) + '}$',
-verticalalignment='top',horizontalalignment='left',
-        transform=ax.transAxes,fontsize=12., color='black')
-
-      ax.text(0.03,0.67,'FW$_b$ = '+ str(round(fw_b_final,2)) + '$^{+' + str(round(fw_b_dict['error_plus'],0)) + '}_{-' + str(round(fw_b_dict['error_minus'],0)) + '}$',
-        verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
-        color='black')
-      ax.text(0.03,0.61,'log N(HI) = '+ str(round(h1_col_final,2)) + '$^{+' + str(round(h1_col_dict['error_plus'],2)) + '}_{-' + str(round(h1_col_dict['error_minus'],2)) + '}$',
+      ax.text(0.03,0.79,'log N(HI) = '+ str(round(h1_col_final,2)) + '$^{+' + str(round(h1_col_dict['error_plus'],2)) + '}_{-' + str(round(h1_col_dict['error_minus'],2)) + '}$',
         verticalalignment='top',horizontalalignment='left',
         transform=ax.transAxes,fontsize=12., color='black')
-      ax.text(0.03,0.55,'b = '+ str(round(h1_b_final,2)) + '$^{+' + str(round(h1_b_dict['error_plus'],1)) + '}_{-' + str(round(h1_b_dict['error_minus'],1)) + '}$',
+      ax.text(0.03,0.73,'b = '+ str(round(h1_b_final,2)) + '$^{+' + str(round(h1_b_dict['error_plus'],1)) + '}_{-' + str(round(h1_b_dict['error_minus'],1)) + '}$',
         verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12., 
         color='black')
-      ax.text(0.03,0.49,'V$_{HI}$ = '+ str(round(h1_vel_final,2)) + '$^{+' + str(round(h1_vel_dict['error_plus'],1)) + '}_{-' + str(round(h1_vel_dict['error_minus'],1)) + '}$',verticalalignment='top',horizontalalignment='left',
+      ax.text(0.03,0.67,'V$_{HI}$ = '+ str(round(h1_vel_final,2)) + '$^{+' + str(round(h1_vel_dict['error_plus'],1)) + '}_{-' + str(round(h1_vel_dict['error_minus'],1)) + '}$',verticalalignment='top',horizontalalignment='left',
         transform=ax.transAxes,fontsize=12., color='black')
       #ax.text(0.03,0.61,'d2h = '+"{:.2E}".format(d2h_final)+' $\pm$  '+"{:.2E}".format(d2h_err),
   #      verticalalignment='top',horizontalalignment='left',transform=ax.transAxes,fontsize=12.,
@@ -274,6 +229,7 @@ verticalalignment='top',horizontalalignment='left',
         transform=ax.transAxes,fontsize=12., color='black')
       ax.text(0.97,0.89,r'$\chi^{2}_{\nu}$ = '+str(round(global_min,2)),verticalalignment='top', 
         horizontalalignment='right',transform=ax.transAxes,fontsize=12., color='black')
+
 
 
 
