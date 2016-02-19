@@ -4,7 +4,6 @@
 import emcee
 import triangle  ## I made some modifications to my forked copy of triangle to make the kind of plots I want
 import numpy as np
-#import scipy.optimize as op
 import matplotlib.pyplot as plt
 import astropy.io.fits as pyfits
 import lyapy
@@ -17,17 +16,7 @@ plt.ion()
 np.random.seed(82)
 
 
-## I usually start with fitting an example where I know the "true" values, but this part's not necessary.
-am_exp = 1e-13
-vs_n_true = 28.
-am_n_true = 6.4
-fw_n_true = 156.
-vs_b_true = 35.
-am_b_true = 0.32
-fw_b_true = 460.
-h1_col_true = 17.9
-h1_b_true = 12.
-h1_vel_true = 29.
+## Fixing the D/H ratio at 1.5e-5.  1.56e-5 might be a better value to use though (Wood+ 2004 is the reference, I believe)
 d2h_true = 1.5e-5
 
 descrip = '_d2h_fixed' ## appended to saved files throughout
