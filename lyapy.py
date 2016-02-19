@@ -1,11 +1,11 @@
 import numpy as np
-import pyspeckit
+import pyspeckit ## only necessary if using MPFIT
 import astropy.io.fits as pyfits
 import matplotlib.pyplot as plt
 import astropy.table
-import voigt
-import itertools
-import multiprocessing
+import voigt ## this is my voigt.py file
+import itertools ## only necessary for gridsearch
+import multiprocessing ## only necessary for gridsearch
 import scipy.stats
 
 pc_in_cm = 3e18
@@ -19,15 +19,16 @@ e=4.8032e-10            # electron charge in esu
 mp=1.6726231e-24        # proton mass in grams
 me=mp/1836.             # electron mass in grams
 
-data_to_fit_filename = '/Volumes/Storage/Lya_reconstruction/lyapy/lyapy/data_to_fit.savepy'
-tau_tot_ism_grid_filename = '/Volumes/Storage/Lya_reconstruction/lyapy/lyapy/tau_tot_ism_grid.fits'
-lya_intrinsic_profile_grid_filename = '/Volumes/Storage/Lya_reconstruction/lyapy/lyapy/lya_intrinsic_profile_grid.fits'
 
+## ugly stuff that's only necessary if you're doing a gridsearch. I should delete this.
+data_to_fit_filename = '/Users/alyo7318/Data/HST/Gridsearch/data_to_fit.savepy'
+tau_tot_ism_grid_filename = '/Users/alyo7318/Data/HST/Gridsearch/tau_tot_ism_grid.fits'
+lya_intrinsic_profile_grid_filename = '/Users/alyo7318/Data/HST/Gridsearch/lya_intrinsic_profile_grid.fits'
+lya_flux_grid_filename = '/Users/alyo7318/Data/HST/Gridsearch/lya_flux_grid.fits'
 
 from matplotlib import rc
 rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 rc('text', usetex=True)
-
 
 
 def geocoronal_subtraction(input_filename,resolution,starname,sub_geo=False):
@@ -162,12 +163,13 @@ def EUV_spectrum(total_Lya_flux,distance_to_target,starname,
       waveband_index = np.where((EUV_wavelength_array >= wavebands[i]) & 
                                 (EUV_wavelength_array < wavebands[i+1]))
       EUV_flux_array[waveband_index] = waveband_flux
-      EUV_luminosity += (waveband_flux * wavebandwidth[i]) * 4*np.pi*(au_in_cm)**2
+      #EUV_luminosity += (waveband_flux * (wavebandwidth[i]) * 4*np.pi*(au_in_cm)**2
    
     ## converting EUV_flux_array to distance from target -- still erg/s/cm^2/Angstrom
+
     EUV_flux_array *= (au_in_cm/(distance_to_target*pc_in_cm))**2
- 
-    print ('Total EUV luminosity (100-1170 Angstroms) = ' + str( EUV_luminosity) + ' erg/s')
+    
+   
   
     if doplot:
       f = plt.figure()
@@ -178,27 +180,35 @@ def EUV_spectrum(total_Lya_flux,distance_to_target,starname,
       ax.set_yscale('log')
       ax.set_ylabel(r'Flux ' r'(erg s$^{-1}$ cm$^{-2}$ \AA$^{-1}$)',fontsize=14)
       ax.set_xlabel(r'Wavelength (\AA)',fontsize=14)
-      ax.set_title(starname + ' EUV spectrum',fontsize=16)
-      ax.text(0.97,0.97,r'Ly$\alpha$ flux = '+"{:.2E}".format(total_Lya_flux),
-              verticalalignment='top', horizontalalignment='right',
-              transform=ax.transAxes,fontsize=12., color='black')
-      ax.text(0.97,0.93,'[erg/s/cm2]',verticalalignment='top', 
-              horizontalalignment='right',transform=ax.transAxes,fontsize=12., 
-              color='black')
-      ax.text(0.97,0.89,'EUV luminosity = '+"{:.2E}".format(EUV_luminosity),
+      ax.set_xlim([100,1170])
+      #ax.set_title(starname + ' EUV spectrum',fontsize=16)
+      #ax.text(0.97,0.97,r'Ly$\alpha$ flux = '+"{:.2E}".format(total_Lya_flux),
+      #        verticalalignment='top', horizontalalignment='right',
+      #        transform=ax.transAxes,fontsize=12., color='black')
+      #ax.text(0.97,0.93,'[erg/s/cm2]',verticalalignment='top', 
+      #        horizontalalignment='right',transform=ax.transAxes,fontsize=12., 
+      #        color='black')
+
+      EUV_luminosity_argument = float(("%e" % EUV_luminosity).split('e')[0])
+      EUV_luminosity_exponent = float(("%e" % EUV_luminosity).split('e')[1])
+
+      ax.text(0.97,0.89,'EUV luminosity = '+ str(round(EUV_luminosity_argument,2)) + r'$\times$10$^{' + str(int(EUV_luminosity_exponent)) + '}$',
               verticalalignment='top',horizontalalignment='right',
               transform=ax.transAxes,fontsize=12., color='black')
-      ax.text(0.97,0.85,'[erg/s]',verticalalignment='top',horizontalalignment='right',
+      ax.text(0.97,0.85,r'erg s$^{-1}$',verticalalignment='top',horizontalalignment='right',
               transform=ax.transAxes,fontsize=12., color='black')
 
       outfile_str = starname + '_EUV_spectrum.png'
       plt.savefig(outfile_str)
 
+    EUV_luminosity = np.trapz(EUV_flux_array,EUV_wavelength_array) * 4*np.pi*(distance_to_target*pc_in_cm)**2
+
+    print ('Total EUV luminosity (100-1170 Angstroms) = ' + str( EUV_luminosity) + ' erg/s')
     if savefile:
       ## Writing EUV flux array to txt file
       #comment_str = 'Wavelength in Angstroms and EUV flux in erg/s/cm^2/AA'
       outfile_str = starname + '_EUV_spectrum.txt'
-      np.savetxt(outfile_str,np.transpose([EUV_wavelength_array,EUV_flux_array,0.25*EUV_flux_array]))#,header=comment_str)
+      np.savetxt(outfile_str,np.transpose([EUV_wavelength_array,EUV_flux_array]))#,header=comment_str)
 
     return EUV_wavelength_array,EUV_flux_array,EUV_luminosity
 
@@ -212,7 +222,7 @@ def gaussian_flux(amplitude,sigma):
     return flux
 
 def lya_intrinsic_profile_func(x,vs_n,am_n,fw_n,vs_b=2.,am_b=2.,fw_b=2.,
-                               return_flux=False,single_component_flux=False):
+                               return_flux=False,single_component_flux=False,return_individual_components=False):
 
     """
     Given a wavelength array and parameters (velocity centroid, amplitude, and FWHM)
@@ -243,12 +253,18 @@ def lya_intrinsic_profile_func(x,vs_n,am_n,fw_n,vs_b=2.,am_b=2.,fw_b=2.,
     
     if return_flux:
       if not single_component_flux:
-        return lya_profile_narrow+lya_profile_broad,lya_flux_narrow+lya_flux_broad
+          if return_individual_components:
+            return lya_profile_narrow,lya_profile_broad,lya_flux_narrow+lya_flux_broad
+          else:
+            return lya_profile_narrow+lya_profile_broad,lya_flux_narrow+lya_flux_broad
       else:
-        return lya_profile_narrow,lya_flux_narrow
+          return lya_profile_narrow,lya_flux_narrow
     else:
       if not single_component_flux:
-        return lya_profile_narrow+lya_profile_broad
+        if return_individual_components:
+          return lya_profile_narrow,lya_profile_broad
+        else:
+          return lya_profile_narrow+lya_profile_broad
       else:
         return lya_profile_narrow
 
@@ -294,7 +310,7 @@ def damped_lya_profile(wave_to_fit,vs_n,am_n,fw_n,vs_b,am_b,fw_b,h1_col,h1_b,
                        return_hyperfine_components=False):
 
     """
-    Computes a damped Lyman-alpha profile (by calling the functions
+    Computes a damped (attenuated) Lyman-alpha profile (by calling the functions
     lya_intrinsic_profile_func and total_tau_profile_func) and convolves it 
     to the proper resolution.
 
@@ -312,6 +328,25 @@ def damped_lya_profile(wave_to_fit,vs_n,am_n,fw_n,vs_b,am_b,fw_b,h1_col,h1_b,
     lyman_fit = np.convolve(lya_obs_high,aa,mode='same')
 
     return lyman_fit*1e14
+
+def damped_lya_profile_shortcut(wave_to_fit,resolution,lya_intrinsic_profile,total_tau_profile):
+
+    """
+    Computes a damped Lyman-alpha profile (by calling the functions
+    lya_intrinsic_profile_func and total_tau_profile_func) and convolves it 
+    to the proper resolution.
+
+    """
+    
+    lya_obs_high = lya_intrinsic_profile * total_tau_profile
+
+    ## Convolving the data ##
+    fw = lya_rest/resolution
+    aa = make_kernel(grid=wave_to_fit,fwhm=fw)
+    lyman_fit = np.convolve(lya_obs_high,aa,mode='same')
+
+    return lyman_fit*1e14
+
 
 def make_kernel(grid,fwhm):
 
@@ -400,7 +435,7 @@ def tau_profile(ncols,vshifts,vdop,h1_or_d1):
 def damped_lya_fitter(multisingle='multi'):
 
     """
-    Generator for Damped LyA fitter class
+    Generator for Damped LyA fitter class -- this for using MPFIT
 
     """
     myclass =  pyspeckit.models.model.SpectralModel(damped_lya_profile,11,
@@ -473,6 +508,10 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
                                            len(fw_n_range),len(vs_b_range),
                                            len(am_b_range),len(fw_b_range),
                                            len(lya_intrinsic_profile_test_convolved)])
+      lya_flux_grid = np.zeros([len(vs_n_range),len(am_n_range),
+                                           len(fw_n_range),len(vs_b_range),
+                                           len(am_b_range),len(fw_b_range)])
+
     else:
       lya_intrinsic_profile_test = lya_intrinsic_profile_func(wave_to_fit,vs_n_range[0],
                                  am_n_range[0],fw_n_range[0],
@@ -482,6 +521,9 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
       lya_intrinsic_profile_grid = np.zeros([len(vs_n_range),len(am_n_range),
                                            len(fw_n_range),         
                                            len(lya_intrinsic_profile_test_convolved)])
+      lya_flux_grid = np.zeros([len(vs_n_range),len(am_n_range),
+                                           len(fw_n_range)])
+
 
     if not single_component_flux:
       for a in range(len(vs_n_range)):
@@ -496,16 +538,17 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
 
                 for f in range(len(fw_b_range)):
       
-                  lya_intrinsic_profile = lya_intrinsic_profile_func(wave_to_fit,
+                  lya_intrinsic_profile,lya_flux = lya_intrinsic_profile_func(wave_to_fit,
                                             vs_n_range[a],am_n_range[b],fw_n_range[c],
                                             vs_b_range[d],am_b_range[e],fw_b_range[f],
-                                            single_component_flux=single_component_flux)
+                                            single_component_flux=single_component_flux,return_flux=True)
                   lya_intrinsic_profile_convolved = np.convolve(lya_intrinsic_profile,
                                                                  kernel,mode='same')
                   if mask.sum() != 0:
                     lya_intrinsic_profile_convolved[mask] = 0
 
                   lya_intrinsic_profile_grid[a,b,c,d,e,f,:] = lya_intrinsic_profile_convolved
+                  lya_flux_grid[a,b,c,d,e,f] = lya_flux
 
     else:
       for a in range(len(vs_n_range)):
@@ -514,21 +557,25 @@ def intrinsic_lya_gridsearch(wave_to_fit,vs_n_range,am_n_range,fw_n_range,vs_b_r
           print 'b (am_n) = ' + str(b) + ' of ' + str(len(am_n_range)-1)
           for c in range(len(fw_n_range)):
       
-                  lya_intrinsic_profile = lya_intrinsic_profile_func(wave_to_fit,
+                  lya_intrinsic_profile,lya_flux = lya_intrinsic_profile_func(wave_to_fit,
                                             vs_n_range[a],am_n_range[b],fw_n_range[c],
-                                            single_component_flux=single_component_flux)
+                                            single_component_flux=single_component_flux,return_flux=True)
                   lya_intrinsic_profile_convolved = np.convolve(lya_intrinsic_profile,
                                                                  kernel,mode='same')
                   if mask.sum() != 0:
                     lya_intrinsic_profile_convolved[mask] = 0
 
                   lya_intrinsic_profile_grid[a,b,c,:] = lya_intrinsic_profile_convolved
+                  lya_flux_grid[a,b,c] = lya_flux
 
 
     
     if save_file:
       hdu = pyfits.PrimaryHDU(data=lya_intrinsic_profile_grid)
       hdu.writeto('lya_intrinsic_profile_grid.fits',clobber=True)
+      hdu2 = pyfits.PrimaryHDU(data=lya_flux_grid)
+      hdu2.writeto('lya_flux_grid.fits',clobber=True)
+
 
     return
 
@@ -646,6 +693,8 @@ def delta_chi2(df,probability_of_exceeding):
 
 
 def LyA_fit(input_filename,initial_parameters,save_figure=True):
+
+    ## MPFITTING
 
     ## Read in fits file ##
     spec_hdu = pyfits.open(input_filename)
@@ -1015,30 +1064,40 @@ def extract_error_bars_from_contours(cs):
 
     return [np.min(x),np.max(x),np.min(y),np.max(y)]
 
-def mask_spectrum(flux_to_fit):
+def mask_spectrum(flux_to_fit,interactive=True,mask_lower_limit=None,mask_upper_limit=None):
 
     """
     Interactively and iteratively creates a Boolean mask for a spectrum.
 
     """
-    plt.ion()
-    continue_parameter = 'no'
-    mask_switch = 'yes'
-    while mask_switch == 'yes':
-      pixel_array = np.arange(len(flux_to_fit))
-      plt.figure()
-      plt.step(pixel_array,flux_to_fit)
-      mask_lower_limit_string = raw_input("Enter mask lower limit (in pixels): ")
-      mask_lower_limit = float(mask_lower_limit_string)
-      mask_upper_limit_string = raw_input("Enter mask upper limit (in pixels): ")
-      mask_upper_limit = float(mask_upper_limit_string)
-      mask = (pixel_array >= mask_lower_limit) & (pixel_array <= mask_upper_limit)
-      flux_to_fit_masked = np.ma.masked_where(mask,flux_to_fit)
-      plt.step(pixel_array,flux_to_fit_masked)
-      continue_parameter = raw_input("Happy? (yes or no]): ")
-      plt.close()
+    if interactive:
+      plt.ion()
+      continue_parameter = 'no'
+      mask_switch = 'yes'
+      while mask_switch == 'yes':
+        pixel_array = np.arange(len(flux_to_fit))
+        plt.figure()
+        plt.step(pixel_array,flux_to_fit)
+        mask_lower_limit_string = raw_input("Enter mask lower limit (in pixels): ")
+        mask_lower_limit = float(mask_lower_limit_string)
+        mask_upper_limit_string = raw_input("Enter mask upper limit (in pixels): ")
+        mask_upper_limit = float(mask_upper_limit_string)
+        mask = (pixel_array >= mask_lower_limit) & (pixel_array <= mask_upper_limit)
+        flux_to_fit_masked = np.ma.masked_where(mask,flux_to_fit)
+        plt.step(pixel_array,flux_to_fit_masked)
+        continue_parameter = raw_input("Happy? (yes or no]): ")
+        plt.close()
 
-      if continue_parameter == 'yes':
-        mask_switch = 'no'
+        if continue_parameter == 'yes':
+          mask_switch = 'no'
+
+    else:
+      pixel_array = np.arange(len(flux_to_fit))
+      mask = (pixel_array >= mask_lower_limit) & (pixel_array <= mask_upper_limit)
 
     return mask
+
+
+
+
+
