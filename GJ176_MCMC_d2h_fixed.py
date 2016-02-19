@@ -21,7 +21,7 @@ d2h_true = 1.5e-5
 
 descrip = '_d2h_fixed' ## appended to saved files throughout
 ## MCMC parameters
-ndim, nwalkers = 9, 150
+ndim, nwalkers = 9, 150 #ndim is # of fitted parameters
 nsteps = 1000 
 burnin = 300
 
