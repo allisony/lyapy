@@ -7,6 +7,7 @@ import voigt ## this is my voigt.py file
 import itertools ## only necessary for gridsearch
 import multiprocessing ## only necessary for gridsearch
 import scipy.stats
+import sys
 
 pc_in_cm = 3e18
 au_in_cm = 1.5e13
@@ -19,12 +20,6 @@ e=4.8032e-10            # electron charge in esu
 mp=1.6726231e-24        # proton mass in grams
 me=mp/1836.             # electron mass in grams
 
-
-## ugly stuff that's only necessary if you're doing a gridsearch. I should delete this.
-data_to_fit_filename = '/Users/alyo7318/Data/HST/Gridsearch/data_to_fit.savepy'
-tau_tot_ism_grid_filename = '/Users/alyo7318/Data/HST/Gridsearch/tau_tot_ism_grid.fits'
-lya_intrinsic_profile_grid_filename = '/Users/alyo7318/Data/HST/Gridsearch/lya_intrinsic_profile_grid.fits'
-lya_flux_grid_filename = '/Users/alyo7318/Data/HST/Gridsearch/lya_flux_grid.fits'
 
 from matplotlib import rc
 rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
@@ -421,8 +416,10 @@ def tau_profile(ncols,vshifts,vdop,h1_or_d1):
                                                                                 ## can't do symmetrical 
 
     xsections_onesided_flipped = xsections_onesided[::-1]
+    
+    		
     ## making the cross-sections symmetrical
-    xsections_symmetrical=np.append(xsections_onesided_flipped[0:nlam-1],xsections_onesided,axis=1) 
+    xsections_symmetrical=np.append(xsections_onesided_flipped[0:nlam-1],xsections_onesided) 
     deltalam=np.max(wave_symmetrical)-np.min(wave_symmetrical)
     dellam=wave_symmetrical[1]-wave_symmetrical[0] 
     nall=np.round(deltalam/dellam)
