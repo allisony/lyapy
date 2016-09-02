@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import lyapy
 import corner as triangle
 from matplotlib.ticker import NullFormatter,MultipleLocator, FormatStrFormatter, MaxNLocator
+import time
+
+plt.ion()
 
 def walkers(sampler):
 
@@ -51,27 +54,14 @@ def walkers(sampler):
 # End walker plot
 
 
-def corner(samples):
+def corner(samples, variable_names):
       # Make the triangle plot. 
-      latex_name_dictionary = {
-         'vs_n': 'v$_n$',
-         'am_n': r'log A$_n$',
-         'fw_n': 'FW$_n$',
-         'vs_b': 'v$_b$',
-         'am_b': r'log A$_b$',
-         'fw_b': 'FW$_b$',
-         'h1_col': '$log$ N(HI)',
-         'h1_b': 'b',
-         'h1_vel': 'v$_{HI}$'}
-      ndim = 9
+      ndim = len(variable_names)
+      
   
       fig, axes = plt.subplots(ndim, ndim, figsize=(12.5,9))
-      triangle.corner(samples, bins=80, labels=[latex_name_dictionary['vs_n'], latex_name_dictionary['am_n'], 
-                      latex_name_dictionary['fw_n'], latex_name_dictionary['vs_b'], 
-                      latex_name_dictionary['am_b'], latex_name_dictionary['fw_b'], 
-                      latex_name_dictionary['h1_col'], latex_name_dictionary['h1_b'], 
-                      latex_name_dictionary['h1_vel']],
-                      max_n_ticks=3,plot_datapoints=False,quantiles=[0.16,0.5,0.84],fig=fig,
+      triangle.corner(samples, bins=20, labels=variable_names,
+                      max_n_ticks=3,plot_contours=True,quantiles=[0.16,0.5,0.84],fig=fig,
                       show_titles=True,verbose=True)
 
 
@@ -82,13 +72,9 @@ def corner(samples):
 
 
 
-def profile(samples, wave_to_fit, flux_to_fit, error_to_fit, resolution, 
-            model_best_fit, lya_intrinsic_profile_mcmc, d2h_true = 1.5e-5):
-      ### MAKING FINAL LYA FIT PLOT ############ I didn't end up using this code for my paper plots
-
-      vs_n_mcmc, am_n_mcmc, fw_n_mcmc, vs_b_mcmc, am_b_mcmc, fw_b_mcmc, h1_col_mcmc, h1_b_mcmc, \
-                                    h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
-                                    zip(*np.percentile(samples, [16, 50, 84], axis=0)))
+def profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
+            model_best_fit, lya_intrinsic_profile_mcmc, samples = None,
+            d2h_true = 1.5e-5):
 
 
       f = plt.figure()
@@ -96,25 +82,45 @@ def profile(samples, wave_to_fit, flux_to_fit, error_to_fit, resolution,
       plt.rc('font', family='serif', size=14)
       ax = f.add_subplot(1,1,1)
 
-    ## plots 1 sigma contours of the Lya profile
-      model_fits = np.zeros((len(samples),len(wave_to_fit)))
-    #for i, sample in enumerate(samples[np.random.randint(len(samples), size=10)]):
-      for i, sample in enumerate(samples):
-          vs_n_i, am_n_i, fw_n_i, vs_b_i, am_b_i, fw_b_i, h1_col_i, h1_b_i, \
-                                        h1_vel_i = sample
-          model_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_i,10**am_n_i,fw_n_i,
-                                                vs_b_i,10**am_b_i,fw_b_i,h1_col_i,
-                                                h1_b_i,h1_vel_i,d2h_true,resolution,
-                                                single_component_flux=False)/1e14
-          model_fits[i,:] = model_fit
-          #plt.plot(wave_to_fit,model_fit,'deeppink',linewidth=1., alpha=0.1)
+      ## plots 1 sigma contours of the Lya profile
+      if samples is not None:
+          ndim = len(samples[0])
+          print ndim
+          if ndim == 9:
+              singcomp = False
+              vs_n_mcmc, am_n_mcmc, fw_n_mcmc, vs_b_mcmc, am_b_mcmc, fw_b_mcmc, h1_col_mcmc, h1_b_mcmc, \
+                                        h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
+                                        zip(*np.percentile(samples, [16, 50, 84], axis=0)))
+          else:
+              singcomp = True
+              vs_n_mcmc, am_n_mcmc, fw_n_mcmc, h1_col_mcmc, h1_b_mcmc, \
+                                        h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
+                                        zip(*np.percentile(samples, [16, 50, 84], axis=0)))
+              vs_b_mcmc, am_b_mcmc, fw_b_mcmc = 0., 0., 0
+               
+          model_fits = np.zeros((len(samples),len(wave_to_fit)))
+          #for i, sample in enumerate(samples[np.random.randint(len(samples), size=10)]):
+          for i, sample in enumerate(samples):
+              if ndim == 9:
+                 vs_n_i, am_n_i, fw_n_i, vs_b_i, am_b_i, fw_b_i, h1_col_i, h1_b_i, \
+                                            h1_vel_i = sample
+              else:
+                 vs_n_i, am_n_i, fw_n_i, h1_col_i, h1_b_i, \
+                                            h1_vel_i = sample
+                 vs_b_i, am_b_i, fw_b_i = 0., 0., 0.
 
-      low = np.zeros_like(wave_to_fit)
-      mid = np.zeros_like(wave_to_fit)
-      high = np.zeros_like(wave_to_fit)
-      for i in np.arange(len(wave_to_fit)):
-          low[i], mid[i], high[i] = np.percentile(model_fits[:,i], [16,50,84])
-      plt.fill_between(wave_to_fit, low, high)
+              model_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_i,10**am_n_i,fw_n_i,
+                                                    vs_b_i,10**am_b_i,fw_b_i,h1_col_i,
+                                                    h1_b_i,h1_vel_i,d2h_true,resolution,
+                                                    single_component_flux=singcomp)/1e14
+              model_fits[i,:] = model_fit
+              #plt.plot(wave_to_fit,model_fit,'deeppink',linewidth=1., alpha=0.1)
+          low = np.zeros_like(wave_to_fit)
+          mid = np.zeros_like(wave_to_fit)
+          high = np.zeros_like(wave_to_fit)
+          for i in np.arange(len(wave_to_fit)):
+              low[i], mid[i], high[i] = np.percentile(model_fits[:,i], [16,50,84])
+          plt.fill_between(wave_to_fit, low, high)
 
       # end 1 sigma contours plotting
 
@@ -144,9 +150,9 @@ def profile(samples, wave_to_fit, flux_to_fit, error_to_fit, resolution,
       ax.set_xlim( [np.min(wave_to_fit),np.max(wave_to_fit)] )
       plt.ticklabel_format(useOffset=False)
 
-      am_n_mcmc_float_str = "{0:.2g}".format(10**am_n_mcmc[0])
-      base, exponent = am_n_mcmc_float_str.split("e")
-      am_n_exponent = float('1e'+exponent)
+#      am_n_mcmc_float_str = "{0:.2g}".format(10**am_n_mcmc[0])
+#      base, exponent = am_n_mcmc_float_str.split("e")
+#      am_n_exponent = float('1e'+exponent)
 
 
 #      # Inserting text

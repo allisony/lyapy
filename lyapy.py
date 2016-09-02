@@ -35,12 +35,12 @@ def geocoronal_subtraction(input_filename,resolution,starname,sub_geo=False):
         
     ## Editing spectrum! ##
 
-    spec = pyfits.getdata(input_filename)
-    spec_header = pyfits.getheader(input_filename)
+    spec = pyfits.getdata(input_filename, 1)
+    spec_header = pyfits.getheader(input_filename, 1)
 
     ## Define wave, flux, error, dq variables ##
-    wave = (spec['w0'] + spec['w1']) / 2.
-    #wave = spec['wave']
+    #wave = (spec['w0'] + spec['w1']) / 2.
+    wave = spec['wavelength']
     flux = spec['flux']
     error = spec['error']
 
@@ -441,7 +441,7 @@ def damped_lya_fitter(multisingle='multi'):
             parlimited=[(False,False),(True,False),(True,False),(False,False),
                         (True,False),(True,False),(True,True),(True,True),
                         (False,False),(True,True),(True,False)], 
-            parlimits=[(14.4,14.6), (1e-16,0), (50.,0),(0,0), (1e-16,0),(50.,0),
+            parlimits=[(14.4,14.6), (1e-16,0), (0.,0),(0,0), (0,0),(50.,0),
                        (17.0,19.5), (5.,20.), (0,0),(1.0e-5,2.5e-5),(10000.,0)])
     myclass.__name__ = "damped_lya"
     
@@ -941,7 +941,7 @@ def LyA_fit(input_filename,initial_parameters,save_figure=True):
       np.savetxt(outfile_str2,np.transpose([wave_to_fit_extended,lya_profile_intrinsic_extended,
                                              0.25*lya_profile_intrinsic_extended]))
 
-    return
+    return fit_parameters
 
 
 def LyA_gridsearch(input_filename,parameter_range,num_cores,

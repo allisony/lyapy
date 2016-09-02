@@ -2,12 +2,11 @@
 
 
 import emcee
-import corner as triangle  ## I made some modifications to my forked copy of triangle to make the kind of plots I want
 import numpy as np
 import matplotlib.pyplot as plt
 import astropy.io.fits as pyfits
 import lyapy
-from matplotlib.ticker import NullFormatter,MultipleLocator, FormatStrFormatter, MaxNLocator
+import lya_plot
 
 
 plt.ion()
