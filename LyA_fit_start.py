@@ -9,6 +9,10 @@ import pyspeckit
 
 # Define the probability function as likelihood * prior.
 # I use a flat/uniform prior for everything but h1_b.
+
+
+## 17 Jan 2018 - To Do: add option for Gaussian priors. And make it easier to switch between 
+## fitting a single Gaussian and two Gaussians.
 def lnprior(theta):
     vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel = theta
     if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (vs_b_min < vs_b < vs_b_max) and (am_b_min < am_b < am_b_max) and (fw_b_min < fw_b < fw_b_max) and (h1_col_min < h1_col < h1_col_max) and (h1_b_min < h1_b < h1_b_max) and (h1_vel_min < h1_vel < h1_vel_max):
@@ -72,6 +76,45 @@ flux_to_fit = spec['flux']
 error_to_fit = spec['error']
 resolution = 12200.
 #resolution = spec_hdu[0].header['SPECRES']
+
+## 17 Jan 2018 - To Do: add in option to use STIS LSF from STScI's website. Need toggles for grating
+## and slit. Allison has pasted her code here for later incorporation either here or in lyapy.py. Example use:
+#stis_lsf = np.loadtxt('STIS_G140L_LSF.dat',skiprows=2) # HIP 23309 52X0.1 G140L
+#kernel_for_convolution = ready_stis_lsf(stis_lsf[:,0],stis_lsf[:,1],0.6,wave_to_fit[mask])
+
+#def ready_stis_lsf(orig_lsf_wave,orig_lsf,stis_grating_disp,data_wave):
+#
+#  """ 
+#  Using this function (output aa) will allow the user to use a STIS LSF
+#  to convolve their model (lya_obs_high), so lyman_fit = np.convolve(lya_obs_high,aa,mode='same')
+#  to match the resolution/resolving power of their data (lyman_fit)
+#  orig_lsf_wave is the x array of the STIS LSF
+#  orig_lsf is the y array of the STIS LSF
+#  stis_grating_disp is the dispersion of the STIS grating for your chosen LSF (units: Ang/pix)
+#  data_wave is the wavelength array of your data
+#  """
+#
+#  data_wave_spacing = data_wave[1]-data_wave[0]
+#  data_wave_length = len(data_wave)
+#  lsf_lam_min = np.round(np.min(orig_lsf_wave*stis_grating_disp)/data_wave_spacing) * data_wave_spacing
+#  lsf_lam_onesided = np.arange(lsf_lam_min,0,data_wave_spacing)  ### Make sure it's even and doesn't include zero
+#  if len(lsf_lam_onesided) % 2 != 0:
+#    lsf_lam_onesided = lsf_lam_onesided[1::] # get rid of the first element of the array
+#
+#  lsf_lam_flipped = lsf_lam_onesided[::-1]
+#  lsf_lam_pluszero=np.append(lsf_lam_onesided,np.array([0]))
+#  lsf_lam=np.append(lsf_lam_pluszero,lsf_lam_flipped) # should be odd
+#
+#  lsf_interp = np.interp(lsf_lam,orig_lsf_wave*stis_grating_disp,orig_lsf/np.sum(orig_lsf))
+#  lsf_interp_norm = lsf_interp/np.sum(lsf_interp) # I don't know why I do np.sum() for normalization...
+#
+#  if data_wave_length < len(lsf_interp_norm):
+#      lsf_interp_norm = np.delete(lsf_interp_norm,np.where(lsf_interp_norm == 0))
+#      lsf_interp_norm = np.insert(lsf_interp_norm,0,0)
+#      lsf_interp_norm = np.append(lsf_interp_norm,0)
+#
+#  return lsf_interp_norm
+
 
 ## This part is just making sure the error bars in the low-flux wings aren't smaller than the RMS 
 ## in the wings
