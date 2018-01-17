@@ -20,7 +20,8 @@ d2h_true = 1.5e-5
 
 descrip = '_d2h_fixed' ## appended to saved files throughout
 ## MCMC parameters
-ndim, nwalkers = 9, 30 #ndim is # of fitted parameters
+ndim = 9 #ndim is number of fitted parameters 
+nwalkers = 30 # must be even, not odd
 nsteps = 500 
 burnin = 300
 
@@ -46,6 +47,7 @@ rms_wing = np.std(flux_to_fit[np.where((wave_to_fit > np.min(wave_to_fit)) & (wa
 error_to_fit[np.where(error_to_fit < rms_wing)] = rms_wing
 
 ## Masking the core of the HI absorption because it may be contaminated by geocoronal emission
+## 18 Jan 2018 - I don't think this part is actually necessary. The convolution should fit this inner region well.
 mask = lyapy.mask_spectrum(flux_to_fit,interactive=False,mask_lower_limit=36.,mask_upper_limit=42.)
 flux_masked = np.ma.masked_array(spec['flux'],mask=mask)
 wave_masked = np.ma.masked_array(spec['wave'],mask=mask)
@@ -55,6 +57,7 @@ error_masked = np.ma.masked_array(spec['error'],mask=mask)
 
 ## Defining parameter ranges. Below I use uniform priors for most of the parameters -- as long
 ## as they fit inside these ranges.
+## 18 Jan 2018 -- To Do: There should be a way here to fix certain parameters.
 vs_n_min = 0.
 vs_n_max = 75.
 am_n_min = -13.1
