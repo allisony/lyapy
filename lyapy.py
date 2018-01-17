@@ -343,14 +343,19 @@ def damped_lya_profile_shortcut(wave_to_fit,resolution,lya_intrinsic_profile,tot
     return lyman_fit*1e14
 
 
-def make_kernel(grid,fwhm):
+def make_kernel(grid,fwhm,nfwhm=4.):
 
     """
     Creates a kernel used for convolution to a certain resolution.
 
+    Grid is the wavelength array of your data (not your model)
+
+    fwhm = lya_rest/resolution where resolution is resolving power
+
+    nfwhm helps controls the length of the kernel - default is 4
+    and probably shouldn't be changed unless you have a good reason.
     """
 
-    nfwhm = 4.  ## No idea what this parameter is
     ngrd    = len(grid)
     spacing = (grid[ngrd-1]-grid[0])/(ngrd-1.)
     nkpts   = round(nfwhm*fwhm/spacing)
