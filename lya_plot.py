@@ -12,7 +12,6 @@ def walkers(sampler,burnin,variable_names):
 
     ndim = len(variable_names)
 
-    # Plot the walkers
     fig, axes = plt.subplots(ndim, 1, sharex=True, figsize=(8, ndim))
 
     for i in range(ndim):
@@ -26,7 +25,6 @@ def walkers(sampler,burnin,variable_names):
     #outfile_str = spec_header['STAR'] + descrip + '_walkers.png'
     #plt.savefig(outfile_str)
 
-# End walker plot
 
 
 def corner(samples, variable_names):
@@ -57,12 +55,16 @@ def profile(wave_to_fit, flux_to_fit, error_to_fit, resolution,
       plt.rc('font', family='serif', size=14)
       ax = f.add_subplot(1,1,1)
 
-      ## plots 1 sigma contours of the Lya profile
+      ## plots 1 sigma contours of the Lya profile - Will draws samples from the walkers and plots them
+      ## e.g., from the emcee website example of fitting a straight line - 
+      ## for m, b, lnf in samples[np.random.randint(len(samples), size=100)]:
+      ##    plt.plot(xl, m*xl+b, color="k", alpha=0.1)
+      ## Should we implement this? Will, share your code on this?
       if samples is not None:
           ndim = len(samples[0])
           #print ndim
           if ndim == 9:
-              singcomp = False
+              singcomp = False  ## this part will need editing
               vs_n_mcmc, am_n_mcmc, fw_n_mcmc, vs_b_mcmc, am_b_mcmc, fw_b_mcmc, h1_col_mcmc, h1_b_mcmc, \
                                         h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
                                         zip(*np.percentile(samples, [16, 50, 84], axis=0)))
