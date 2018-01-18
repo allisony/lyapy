@@ -263,36 +263,37 @@ if do_emcee:
                          np.random.uniform(low=h1_b_min,high=h1_b_max,size=1)[0],
                          np.random.uniform(low=h1_vel_min,high=h1_vel_max,size=1)[0]]) for i in range(nwalkers)]
     
-    
+    ## Here is where you choose which lnprob function you want from above.
     if single_component_flux:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_single, args=(wave_to_fit,flux_to_fit,error_to_fit))
     else:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit))
     
-        
-    vs_n_pos = np.zeros(len(pos))
-    am_n_pos = np.zeros(len(pos))
-    fw_n_pos = np.zeros(len(pos))
-    if not single_component_flux:
-        vs_b_pos = np.zeros(len(pos))
-        am_b_pos = np.zeros(len(pos))
-        fw_b_pos = np.zeros(len(pos))
-    h1_col_pos = np.zeros(len(pos))
-    h1_b_pos = np.zeros(len(pos))
-    h1_vel_pos = np.zeros(len(pos))
-    
-    
-    for i in range(len(pos)):
-        vs_n_pos[i] = pos[i][0]
-        am_n_pos[i] = pos[i][1]
-        fw_n_pos[i] = pos[i][2]
-        if not single_component_flux:
-            vs_b_pos[i] = pos[i][3]
-            am_b_pos[i] = pos[i][4]
-            fw_b_pos[i] = pos[i][5]
-        h1_col_pos[i] = pos[i][-3]
-        h1_b_pos[i] = pos[i][-2]
-        h1_vel_pos[i] = pos[i][-1]
+    ## These next lines are just for plotting where the walkers are initialized, and don't appear
+    ## to be used anymore. I've commented them out until we delete them later.
+    #vs_n_pos = np.zeros(len(pos))
+    #am_n_pos = np.zeros(len(pos))
+    #fw_n_pos = np.zeros(len(pos))
+    #if not single_component_flux:
+    #    vs_b_pos = np.zeros(len(pos))
+    #    am_b_pos = np.zeros(len(pos))
+    #    fw_b_pos = np.zeros(len(pos))
+    #h1_col_pos = np.zeros(len(pos))
+    #h1_b_pos = np.zeros(len(pos))
+    #h1_vel_pos = np.zeros(len(pos))
+    #
+    #
+    #for i in range(len(pos)):
+    #    vs_n_pos[i] = pos[i][0]
+    #    am_n_pos[i] = pos[i][1]
+    #    fw_n_pos[i] = pos[i][2]
+    #    if not single_component_flux:
+    #        vs_b_pos[i] = pos[i][3]
+    #        am_b_pos[i] = pos[i][4]
+    #        fw_b_pos[i] = pos[i][5]
+    #    h1_col_pos[i] = pos[i][-3]
+    #    h1_b_pos[i] = pos[i][-2]
+    #    h1_vel_pos[i] = pos[i][-1]
     
     
     
