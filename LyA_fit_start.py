@@ -102,7 +102,7 @@ input_filename = 'p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.
 
 ## Set fitting parameters
 global single_component_flux
-single_component_flux = True
+single_component_flux = False
 do_emcee = True
 
 
