@@ -387,7 +387,7 @@ def tau_profile(ncols,vshifts,vdop,h1_or_d1):
         raise ValueError("h1_or_d1 can only equal 'h1' or 'd1'!")
 
     Ntot=10.**ncols  # column density of H I gas
-    nlam=1000.       # number of elements in the wavelength grid
+    nlam=1000       # number of elements in the wavelength grid
     xsections_onesided=np.zeros(nlam)  # absorption cross sections as a 
                                        # function of wavelength (one side of transition)
     u_parameter=np.zeros(nlam)  # Voigt "u" parameter
