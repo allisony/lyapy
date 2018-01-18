@@ -355,7 +355,7 @@ if do_emcee:
     
      
     
-    #lya_plot.walkers(sampler)
+    lya_plot.walkers(sampler,burnin)
     #lya_plot.corner(samples)
     lya_plot.profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
                 model_best_fit, lya_intrinsic_profile_mcmc, samples=samples, d2h_true = 1.5e-5)
