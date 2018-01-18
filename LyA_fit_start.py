@@ -5,10 +5,6 @@ import emcee
 import numpy as np
 import astropy.io.fits as pyfits
 import lya_plot
-import pyspeckit
-
-# Define the probability function as likelihood * prior.
-# I use a flat/uniform prior for everything but h1_b.
 
 
 ## 17 Jan 2018 - To Do: add example for Gaussian priors.
@@ -167,7 +163,8 @@ resolution = 12200.
 rms_wing = np.std(flux_to_fit[np.where((wave_to_fit > np.min(wave_to_fit)) & (wave_to_fit < 1214.5))])
 error_to_fit[np.where(error_to_fit < rms_wing)] = rms_wing
 
-## Masking the core of the HI absorption because it may be contaminated by geocoronal emission
+## Masking the core of the HI absorption because it may be contaminated by geocoronal emission. Perhaps
+## not necessary for all data sets.
 mask = lyapy.mask_spectrum(flux_to_fit,interactive=False,mask_lower_limit=36.,mask_upper_limit=42.)
 flux_masked = np.transpose(np.ma.masked_array(spec['flux'],mask=mask))
 wave_masked = np.transpose(np.ma.masked_array(spec['wave'],mask=mask))
@@ -194,6 +191,8 @@ else:
          r'$b$',
          r'$v_{HI}$' ]
 
+## May need to define your own variable_names list if you're keeping any parameters fixed, etc.
+
 ndim = len(variable_names)
 
 
@@ -219,8 +218,8 @@ if do_emcee:
     
     
     
-    ## Defining parameter ranges. Below I use uniform priors for most of the parameters -- as long
-    ## as they fit inside these ranges.
+    ## Defining parameter ranges. Above, we use uniform priors for most of the parameters (not h1_b) 
+    ## Need to add Gaussian prior examples.
     vs_n_min = -100.
     vs_n_max = 100.
     am_n_min = -16.
@@ -239,6 +238,10 @@ if do_emcee:
     h1_b_max = 20.
     h1_vel_min = -50
     h1_vel_max = 50.
+
+    ## Here should be defined any other parameters being fixed (e.g., h1_b_true = 11.5 - for a T=8000 K
+    ## standard ISM)
+    # h1_b_true = 11.5 # km/s
     
     
     
@@ -268,33 +271,7 @@ if do_emcee:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_single, args=(wave_to_fit,flux_to_fit,error_to_fit))
     else:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit))
-    
-    ## These next lines are just for plotting where the walkers are initialized, and don't appear
-    ## to be used anymore. I've commented them out until we delete them later.
-    #vs_n_pos = np.zeros(len(pos))
-    #am_n_pos = np.zeros(len(pos))
-    #fw_n_pos = np.zeros(len(pos))
-    #if not single_component_flux:
-    #    vs_b_pos = np.zeros(len(pos))
-    #    am_b_pos = np.zeros(len(pos))
-    #    fw_b_pos = np.zeros(len(pos))
-    #h1_col_pos = np.zeros(len(pos))
-    #h1_b_pos = np.zeros(len(pos))
-    #h1_vel_pos = np.zeros(len(pos))
-    #
-    #
-    #for i in range(len(pos)):
-    #    vs_n_pos[i] = pos[i][0]
-    #    am_n_pos[i] = pos[i][1]
-    #    fw_n_pos[i] = pos[i][2]
-    #    if not single_component_flux:
-    #        vs_b_pos[i] = pos[i][3]
-    #        am_b_pos[i] = pos[i][4]
-    #        fw_b_pos[i] = pos[i][5]
-    #    h1_col_pos[i] = pos[i][-3]
-    #    h1_b_pos[i] = pos[i][-2]
-    #    h1_vel_pos[i] = pos[i][-1]
-    
+        
     
     
     # Clear and run the production chain.
@@ -307,7 +284,10 @@ if do_emcee:
     samples = sampler.chain[:, burnin:, :].reshape((-1, ndim))
     
     
-    ## print best fit parameters + uncertainties
+    ## print best fit parameters + uncertainties. This section will need to be edited if you fix any
+    ## parameters or have some other unique modification to the parameters.
+    ## I like what Elisabeth has done here -- altering the _mcmc best fit values for parameters not 
+    ## included or held fixed here will allow the rest of the code to run smoothly.
     if single_component_flux:
         vs_b_mcmc, am_b_mcmc, fw_b_mcmc = [0., 0., 0.], [0., 0., 0.], [0., 0., 0.]
         vs_n_mcmc, am_n_mcmc, fw_n_mcmc, h1_col_mcmc, h1_b_mcmc, \
@@ -341,7 +321,7 @@ if do_emcee:
     ## best fit intrinsic profile
     lya_intrinsic_profile_mcmc,lya_intrinsic_flux_mcmc = lyapy.lya_intrinsic_profile_func(wave_to_fit,
              vs_n_mcmc[0],10**am_n_mcmc[0],fw_n_mcmc[0],vs_b_mcmc[0],10**am_b_mcmc[0],fw_b_mcmc[0],
-             return_flux=True)
+             return_flux=True, single_component_flux=single_component_flux)
     
     ## best fit attenuated profile
     model_best_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_mcmc[0],10.**am_n_mcmc[0],fw_n_mcmc[0],
@@ -373,7 +353,7 @@ if do_emcee:
     h1_b_limits = [h1_b_mcmc[0] + h1_b_mcmc[1], h1_b_mcmc[0] - h1_b_mcmc[2]]
     h1_vel_limits = [h1_vel_mcmc[0] + h1_vel_mcmc[1], h1_vel_mcmc[0] - h1_vel_mcmc[2]]
     
-    ## Whenever I say "damped" I mean "attenuated"      
+     
     
     #lya_plot.walkers(sampler)
     #lya_plot.corner(samples)
