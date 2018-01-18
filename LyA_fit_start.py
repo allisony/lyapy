@@ -11,8 +11,10 @@ import pyspeckit
 # I use a flat/uniform prior for everything but h1_b.
 
 
-## 17 Jan 2018 - To Do: add option for Gaussian priors. And make it easier to switch between 
-## fitting a single Gaussian and two Gaussians.
+## 17 Jan 2018 - To Do: add example for Gaussian priors.
+    
+
+## for a 2 Gaussian model with a Voigt profile for the ISM - all 9 parameters free
 def lnprior(theta):
     vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel = theta
     if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (vs_b_min < vs_b < vs_b_max) and (am_b_min < am_b < am_b_max) and (fw_b_min < fw_b < fw_b_max) and (h1_col_min < h1_col < h1_col_max) and (h1_b_min < h1_b < h1_b_max) and (h1_vel_min < h1_vel < h1_vel_max):
@@ -26,6 +28,13 @@ def lnlike(theta, x, y, yerr):
                                        single_component_flux=False)/1e14
     return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
 
+def lnprob(theta, x, y, yerr):
+    lp = lnprior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lnlike(theta, x, y, yerr)
+
+## for a 1 Gaussian model with a Voigt profile for the ISM - all 6 parameters free
 def lnprior_single(theta):
     vs_n, am_n, fw_n,  h1_col, h1_b, h1_vel = theta
     if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (h1_col_min < h1_col < h1_col_max) and (h1_b_min < h1_b < h1_b_max) and (h1_vel_min < h1_vel < h1_vel_max):
@@ -39,18 +48,56 @@ def lnlike_single(theta, x, y, yerr):
                                        single_component_flux=True)/1e14
     return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
 
-
-def lnprob(theta, x, y, yerr):
-    lp = lnprior(theta)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + lnlike(theta, x, y, yerr)
-
 def lnprob_single(theta, x, y, yerr):
     lp = lnprior_single(theta)
     if not np.isfinite(lp):
         return -np.inf
     return lp + lnlike_single(theta, x, y, yerr)
+
+## Could include an example for how to change any of these to a Gaussian prior
+
+
+## for a 2 Gaussian model with a Voigt profile for the ISM - h1_b fixed at h1_b_true, all others free
+def lnprior_h1_b_fixed(theta):
+    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_vel = theta
+    if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (vs_b_min < vs_b < vs_b_max) and (am_b_min < am_b < am_b_max) and (fw_b_min < fw_b < fw_b_max) and (h1_col_min < h1_col < h1_col_max) and (h1_vel_min < h1_vel < h1_vel_max):
+        return 0.0
+    return -np.inf
+
+def lnlike_h1_b_fixed(theta, x, y, yerr):
+    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_vel = theta
+    y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
+                                       h1_b_true,h1_vel,d2h=d2h_true,resolution=resolution,
+                                       single_component_flux=False)/1e14
+    return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
+
+def lnprob_h1_b_fixed(theta, x, y, yerr):
+    lp = lnprior_h1_b_fixed(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lnlike_h1_b_fixed(theta, x, y, yerr)
+
+## for a 1 Gaussian model with a Voigt profile for the ISM - h1_b fixed at h1_b_true, all others free
+def lnprior_single_h1_b_fixed(theta):
+    vs_n, am_n, fw_n, h1_col, h1_vel = theta
+    if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (h1_col_min < h1_col < h1_col_max) and (h1_vel_min < h1_vel < h1_vel_max):
+        return 0.0
+    return -np.inf
+
+def lnlike_single_h1_b_fixed(theta, x, y, yerr):
+    vs_n, am_n, fw_n, h1_col, h1_vel = theta
+    y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,0,0,0,h1_col,
+                                       h1_b_true,h1_vel,d2h=d2h_true,resolution=resolution,
+                                       single_component_flux=True)/1e14
+    return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
+
+def lnprob_single_h1_b_fixed(theta, x, y, yerr):
+    lp = lnprior_single_h1_b_fixed(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lnlike_single_h1_b_fixed(theta, x, y, yerr)
+
+
 
 
 ## Read in fits file ##
@@ -60,7 +107,6 @@ input_filename = 'p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.
 ## Set fitting parameters
 global single_component_flux
 single_component_flux = False
-do_mpfit = True
 do_emcee = True
 
 
@@ -122,7 +168,6 @@ rms_wing = np.std(flux_to_fit[np.where((wave_to_fit > np.min(wave_to_fit)) & (wa
 error_to_fit[np.where(error_to_fit < rms_wing)] = rms_wing
 
 ## Masking the core of the HI absorption because it may be contaminated by geocoronal emission
-## WARNING: masked flux seems to only be used for emcee, not mpfit
 mask = lyapy.mask_spectrum(flux_to_fit,interactive=False,mask_lower_limit=36.,mask_upper_limit=42.)
 flux_masked = np.transpose(np.ma.masked_array(spec['flux'],mask=mask))
 wave_masked = np.transpose(np.ma.masked_array(spec['wave'],mask=mask))
@@ -161,12 +206,12 @@ if do_emcee:
     ## Change this value around sometimes
     np.random.seed(82)
     
-    ## Fixing the D/H ratio at 1.5e-5.  1.56e-5 might be a better value to use though (Wood+ 2004 is the reference, I believe)
+    ## Fixing the D/H ratio at 1.5e-5.  (Wood+ 2004 is the reference, I believe)
     d2h_true = 1.5e-5
     
-    descrip = '_d2h_fixed' ## appended to saved files throughout
+    descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
     ## MCMC parameters
-    nwalkers = 30 #ndim is # of fitted parameters
+    nwalkers = 30
     nsteps = 1000
     burnin = 500
     # number steps included = nsteps - burnin
