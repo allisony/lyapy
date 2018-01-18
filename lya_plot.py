@@ -7,55 +7,21 @@ import time
 
 plt.ion()
 
-def walkers(sampler,burnin):
+
+def walkers(sampler,burnin,variable_names):
+
+    ndim = len(variable_names)
 
     # Plot the walkers
-    fig, axes = plt.subplots(9, 1, sharex=True, figsize=(8, 9))
-    axes[0].plot(sampler.chain[:, :, 0].T, color="k", alpha=0.4)
-    axes[0].yaxis.set_major_locator(MaxNLocator(5))
-    axes[0].axvline(burnin, color="red", lw=2)
-    axes[0].set_ylabel("vsn")
+    fig, axes = plt.subplots(ndim, 1, sharex=True, figsize=(8, ndim))
 
-    axes[1].plot(sampler.chain[:, :, 1].T, color="k", alpha=0.4)
-    axes[1].yaxis.set_major_locator(MaxNLocator(5))
-    axes[1].axvline(burnin, color="red", lw=2)
-    axes[1].set_ylabel("amn")
+    for i in range(ndim):
+      axes[i].plot(sampler.chain[:, :, i].T, color="k", alpha=0.4)
+      axes[i].yaxis.set_major_locator(MaxNLocator(5))
+      axes[i].axvline(burnin, color="red", lw=2)
+      axes[i].set_ylabel(variable_names[i])
 
-    axes[2].plot(sampler.chain[:, :, 2].T, color="k", alpha=0.4)
-    axes[2].yaxis.set_major_locator(MaxNLocator(5))
-    axes[2].axvline(burnin, color="red", lw=2)
-    axes[2].set_ylabel("fwn")
-
-    axes[3].plot(sampler.chain[:, :, 3].T, color="k", alpha=0.4)
-    axes[3].yaxis.set_major_locator(MaxNLocator(5))
-    axes[3].axvline(burnin, color="red", lw=2)
-    axes[3].set_ylabel("vsb")
-
-    axes[4].plot(sampler.chain[:, :, 4].T, color="k", alpha=0.4)
-    axes[4].yaxis.set_major_locator(MaxNLocator(5))
-    axes[4].axvline(burnin, color="red", lw=2)
-    axes[4].set_ylabel("amb")
-
-    axes[5].plot(sampler.chain[:, :, 5].T, color="k", alpha=0.4)
-    axes[5].yaxis.set_major_locator(MaxNLocator(5))
-    axes[5].axvline(burnin, color="red", lw=2)
-    axes[5].set_ylabel("fwb")
-
-    axes[6].plot(sampler.chain[:, :, 6].T, color="k", alpha=0.4)
-    axes[6].yaxis.set_major_locator(MaxNLocator(5))
-    axes[6].axvline(burnin, color="red", lw=2)
-    axes[6].set_ylabel("h1col")
-
-    axes[7].plot(sampler.chain[:, :, 7].T, color="k", alpha=0.4)
-    axes[7].yaxis.set_major_locator(MaxNLocator(5))
-    axes[7].axvline(burnin, color="red", lw=2)
-    axes[7].set_ylabel("h1b")
-
-    axes[8].plot(sampler.chain[:, :, 8].T, color="k", alpha=0.4)
-    axes[8].yaxis.set_major_locator(MaxNLocator(5))
-    axes[8].axvline(burnin, color="red", lw=2)
-    axes[8].set_ylabel("h1vel")
-    axes[8].set_xlabel("step number")
+    axes[ndim-1].set_xlabel("step number")
 
     #outfile_str = spec_header['STAR'] + descrip + '_walkers.png'
     #plt.savefig(outfile_str)
@@ -94,7 +60,7 @@ def profile(wave_to_fit, flux_to_fit, error_to_fit, resolution,
       ## plots 1 sigma contours of the Lya profile
       if samples is not None:
           ndim = len(samples[0])
-          print ndim
+          #print ndim
           if ndim == 9:
               singcomp = False
               vs_n_mcmc, am_n_mcmc, fw_n_mcmc, vs_b_mcmc, am_b_mcmc, fw_b_mcmc, h1_col_mcmc, h1_b_mcmc, \

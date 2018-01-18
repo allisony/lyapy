@@ -102,7 +102,7 @@ input_filename = 'p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.
 
 ## Set fitting parameters
 global single_component_flux
-single_component_flux = False
+single_component_flux = True
 do_emcee = True
 
 
@@ -355,7 +355,7 @@ if do_emcee:
     
      
     
-    lya_plot.walkers(sampler,burnin)
-    #lya_plot.corner(samples)
+    lya_plot.walkers(sampler,burnin,variable_names)
+    lya_plot.corner(samples,variable_names)
     lya_plot.profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
                 model_best_fit, lya_intrinsic_profile_mcmc, samples=samples, d2h_true = 1.5e-5)
