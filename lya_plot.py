@@ -8,30 +8,46 @@ import time
 plt.ion()
 
 
-def walkers(sampler,burnin,variable_names):
-
-    ndim = len(variable_names)
-
+def walkers(sampler, variables, param_order, subset=False):
+    
+    ndim = sampler.chain[0, 0, :].size
+    
     fig, axes = plt.subplots(ndim, 1, sharex=True, figsize=(8, ndim))
 
-    for i in range(ndim):
-      axes[i].plot(sampler.chain[:, :, i].T, color="k", alpha=0.4)
-      axes[i].yaxis.set_major_locator(MaxNLocator(5))
-      axes[i].axvline(burnin, color="red", lw=2)
-      axes[i].set_ylabel(variable_names[i])
+    ## this is for long chains, to plot only 1000 evenly sampled points
+    if subset:
+        toplot = np.array(np.linspace(0,len(sampler.chain[0,:,0])-1,1000), dtype=int)
+    else:
+        toplot = np.ones_like(sampler.chain[0,:,0], dtype=bool)
 
-    axes[ndim-1].set_xlabel("step number")
+    i = 0
+    for p in param_order:
+        if variables[p]['vary']:
+            axes[i].plot(sampler.chain[:, toplot, i].T, color="k", alpha=0.4)
+            axes[i].yaxis.set_major_locator(MaxNLocator(5))
+            axes[i].set_ylabel(variables[p]['texname'])
+            i = i + 1
+
+    if subset:
+        plt.xlabel("Coursely sampled step number")
+    else:
+        plt.xlabel("Step number")
 
     #outfile_str = spec_header['STAR'] + descrip + '_walkers.png'
     #plt.savefig(outfile_str)
 
 
 
-def corner(samples, variable_names):
+def corner(samples, variables, param_order):
       # Make the triangle plot. 
+
+      variable_names = []
+      for p in param_order:
+        if variables[p]['vary']:
+              variable_names.append(variables[p]['texname'])
+
       ndim = len(variable_names)
-      
-  
+
       fig, axes = plt.subplots(ndim, ndim, figsize=(12.5,9))
       triangle.corner(samples, bins=20, labels=variable_names,
                       max_n_ticks=3,plot_contours=True,quantiles=[0.16,0.5,0.84],fig=fig,
@@ -46,8 +62,7 @@ def corner(samples, variable_names):
 
 
 def profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
-            model_best_fit, lya_intrinsic_profile_mcmc, samples = None,
-            d2h_true = 1.5e-5):
+            model_best_fit, lya_intrinsic_profile_mcmc, variables, param_order, samples = None):
 
 
       f = plt.figure()
@@ -63,35 +78,29 @@ def profile(wave_to_fit, flux_to_fit, error_to_fit, resolution,
       if samples is not None:
           ndim = len(samples[0])
           #print ndim
-          if ndim == 9:
-              singcomp = False  ## this part will need editing
-              vs_n_mcmc, am_n_mcmc, fw_n_mcmc, vs_b_mcmc, am_b_mcmc, fw_b_mcmc, h1_col_mcmc, h1_b_mcmc, \
-                                        h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
-                                        zip(*np.percentile(samples, [16, 50, 84], axis=0)))
-          else:
-              singcomp = True
-              vs_n_mcmc, am_n_mcmc, fw_n_mcmc, h1_col_mcmc, h1_b_mcmc, \
-                                        h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
-                                        zip(*np.percentile(samples, [16, 50, 84], axis=0)))
-              vs_b_mcmc, am_b_mcmc, fw_b_mcmc = 0., 0., 0
-               
+              
           model_fits = np.zeros((len(samples),len(wave_to_fit)))
           #for i, sample in enumerate(samples[np.random.randint(len(samples), size=10)]):
           for i, sample in enumerate(samples):
-              if ndim == 9:
-                 vs_n_i, am_n_i, fw_n_i, vs_b_i, am_b_i, fw_b_i, h1_col_i, h1_b_i, \
-                                            h1_vel_i = sample
-              else:
-                 vs_n_i, am_n_i, fw_n_i, h1_col_i, h1_b_i, \
-                                            h1_vel_i = sample
-                 vs_b_i, am_b_i, fw_b_i = 0., 0., 0.
+                theta_all = []
+                j = 0
+                for p in param_order:
+                    if variables[p]['vary']:
+                        theta_all.append(sample[j])
+                        j = j+1
+                    else:
+                        theta_all.append(variables[p]['value'])
 
-              model_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_i,10**am_n_i,fw_n_i,
+                vs_n_i, am_n_i, fw_n_i, vs_b_i, am_b_i, fw_b_i, h1_col_i, h1_b_i, \
+                                h1_vel_i, d2h_i = theta_all
+
+                singcomp = variables['am_b']['single_comp']
+                model_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_i,10**am_n_i,fw_n_i,
                                                     vs_b_i,10**am_b_i,fw_b_i,h1_col_i,
-                                                    h1_b_i,h1_vel_i,d2h_true,resolution,
+                                                    h1_b_i,h1_vel_i,d2h_i,resolution,
                                                     single_component_flux=singcomp)/1e14
-              model_fits[i,:] = model_fit
-              #plt.plot(wave_to_fit,model_fit,'deeppink',linewidth=1., alpha=0.1)
+                model_fits[i,:] = model_fit
+                #plt.plot(wave_to_fit,model_fit,'deeppink',linewidth=1., alpha=0.1)
           low = np.zeros_like(wave_to_fit)
           mid = np.zeros_like(wave_to_fit)
           high = np.zeros_like(wave_to_fit)
