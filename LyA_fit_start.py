@@ -239,7 +239,7 @@ if do_emcee:
     descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
     ## MCMC parameters
     nwalkers = 30
-    nsteps = 1000
+    nsteps = 5000
     burnin = 500
     # number steps included = nsteps - burnin
     
@@ -281,7 +281,14 @@ if do_emcee:
     end = time.time()
     print("Done.")
     print(end-start)
-    
+
+    ## checking the autocorrelation time to see if the chains have converged.
+    try:
+        acor = format(sampler.get_autocorr_time(low=10, high=None, step=1, c=5, fast=False))
+        print("Autocorrelation times = " + str(acor))
+    except emcee.autocorr.AutocorrError:
+        print("AutocorrError: The chain is too short to reliably estimate the autocorrelation time.")
+        print("You should re-run with a longer chain. Continuing.")
     
     ## remove the burn-in period from the sampler
     samples = sampler.chain[:, burnin:, :].reshape((-1, ndim))
