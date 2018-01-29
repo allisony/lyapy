@@ -5,94 +5,55 @@ import emcee
 import numpy as np
 import astropy.io.fits as pyfits
 import lya_plot
-
+import copy
 
 ## 17 Jan 2018 - To Do: add example for Gaussian priors.
     
+import matplotlib.pyplot as plt
 
-## for a 2 Gaussian model with a Voigt profile for the ISM - all 9 parameters free
-def lnprior(theta):
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel = theta
-    if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (vs_b_min < vs_b < vs_b_max) and (am_b_min < am_b < am_b_max) and (fw_b_min < fw_b < fw_b_max) and (h1_col_min < h1_col < h1_col_max) and (h1_b_min < h1_b < h1_b_max) and (h1_vel_min < h1_vel < h1_vel_max):
-        return np.log(h1_b)
-    return -np.inf
+## Define priors and likelihoods, where parameters are fixed
+def lnprior(theta, minmax):
+    assert len(theta) == len(minmax)
+    
+    for i in range(len(theta)):
+        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
+            return -np.inf
+    # ... no parameter was out of range
+    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
+    return np.log(h1_b)
 
-def lnlike(theta, x, y, yerr):
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel = theta
+def lnlike(theta, x, y, yerr, singcomp=False):
+    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
     y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
-                                       h1_b,h1_vel,d2h=d2h_true,resolution=resolution,
-                                       single_component_flux=False)/1e14
+                                       h1_b,h1_vel,d2h=d2h,resolution=resolution,
+                                       single_component_flux=singcomp)/1e14
+
     return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
 
-def lnprob(theta, x, y, yerr):
-    lp = lnprior(theta)
+def lnprob(theta, x, y, yerr, variables):
+    order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
+    theta_all = []
+    range_all = []
+    i = 0
+    for p in order:
+        range_all.append( [variables[p]['min'],variables[p]['max']] )
+        if variables[p]['vary']:
+            theta_all.append(theta[i])
+            i = i+1
+        else:
+            theta_all.append(variables[p]['value'])
+                
+    assert (i) == len(theta)
+    lp = lnprior(theta_all, range_all)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + lnlike(theta, x, y, yerr)
 
-## for a 1 Gaussian model with a Voigt profile for the ISM - all 6 parameters free
-def lnprior_single(theta):
-    vs_n, am_n, fw_n,  h1_col, h1_b, h1_vel = theta
-    if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (h1_col_min < h1_col < h1_col_max) and (h1_b_min < h1_b < h1_b_max) and (h1_vel_min < h1_vel < h1_vel_max):
-        return np.log(h1_b)
-    return -np.inf
+    #if np.random.uniform() > 0.9995: print "took a step!", theta_all
+    ll = lnlike(theta_all, x, y, yerr, singcomp = variables['am_b']['single_comp'])
+    return lp + ll
 
-def lnlike_single(theta, x, y, yerr):
-    vs_n, am_n, fw_n, h1_col, h1_b, h1_vel = theta
-    y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,h1_col, 0., 0., 0.,
-                                       h1_b,h1_vel,d2h=d2h_true,resolution=resolution,
-                                       single_component_flux=True)/1e14
-    return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
-
-def lnprob_single(theta, x, y, yerr):
-    lp = lnprior_single(theta)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + lnlike_single(theta, x, y, yerr)
 
 ## Could include an example for how to change any of these to a Gaussian prior
-
-
-## for a 2 Gaussian model with a Voigt profile for the ISM - h1_b fixed at h1_b_true, all others free
-def lnprior_h1_b_fixed(theta):
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_vel = theta
-    if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (vs_b_min < vs_b < vs_b_max) and (am_b_min < am_b < am_b_max) and (fw_b_min < fw_b < fw_b_max) and (h1_col_min < h1_col < h1_col_max) and (h1_vel_min < h1_vel < h1_vel_max):
-        return 0.0
-    return -np.inf
-
-def lnlike_h1_b_fixed(theta, x, y, yerr):
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_vel = theta
-    y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
-                                       h1_b_true,h1_vel,d2h=d2h_true,resolution=resolution,
-                                       single_component_flux=False)/1e14
-    return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
-
-def lnprob_h1_b_fixed(theta, x, y, yerr):
-    lp = lnprior_h1_b_fixed(theta)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + lnlike_h1_b_fixed(theta, x, y, yerr)
-
-## for a 1 Gaussian model with a Voigt profile for the ISM - h1_b fixed at h1_b_true, all others free
-def lnprior_single_h1_b_fixed(theta):
-    vs_n, am_n, fw_n, h1_col, h1_vel = theta
-    if (vs_n_min < vs_n < vs_n_max) and (am_n_min < am_n < am_n_max) and (fw_n_min < fw_n < fw_n_max) and (h1_col_min < h1_col < h1_col_max) and (h1_vel_min < h1_vel < h1_vel_max):
-        return 0.0
-    return -np.inf
-
-def lnlike_single_h1_b_fixed(theta, x, y, yerr):
-    vs_n, am_n, fw_n, h1_col, h1_vel = theta
-    y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,0,0,0,h1_col,
-                                       h1_b_true,h1_vel,d2h=d2h_true,resolution=resolution,
-                                       single_component_flux=True)/1e14
-    return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
-
-def lnprob_single_h1_b_fixed(theta, x, y, yerr):
-    lp = lnprior_single_h1_b_fixed(theta)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + lnlike_single_h1_b_fixed(theta, x, y, yerr)
-
 
 
 
@@ -101,10 +62,9 @@ input_filename = '../lyalpha/new_x1d_modAY.fits' #raw_input("Enter fits file nam
 input_filename = 'p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.0-1300.0_modAY.fits'
 
 ## Set fitting parameters
-global single_component_flux
-single_component_flux = False
-do_emcee = True
-
+do_emcee = True      # do MCMC fitting (no other options)
+start_uniform = True # starting positions for MCMC are uniform (alternate: Gaussian)
+# for single component flux, set variables['am_b']['single_comp'] = False
 
 ## Read in the data ##
 
@@ -170,31 +130,102 @@ flux_masked = np.transpose(np.ma.masked_array(spec['flux'],mask=mask))
 wave_masked = np.transpose(np.ma.masked_array(spec['wave'],mask=mask))
 error_masked = np.transpose(np.ma.masked_array(spec['error'],mask=mask))
 
-## Fit only one component for LyA profile or two?
-if single_component_flux: 
-    variable_names = [
-         r'$v_n$',
-         r'$log A_n$',
-         r'$FW_n$',
-         r'$log N(HI)$',
-         r'$b$',
-         r'$v_{HI}$' ]
-else:
-    variable_names = [
-         r'$v_n$',
-         r'$log A_n$',
-         r'$FW_n$',
-         r'$v_b$',
-         r'$log A_b$',
-         r'$FW_b$',
-         r'$log N(HI)$',
-         r'$b$',
-         r'$v_{HI}$' ]
 
-## May need to define your own variable_names list if you're keeping any parameters fixed, etc.
+## Here, set up the dictionary of parameters, their values, and their ranges
 
-ndim = len(variable_names)
+## Create the dictionary of parameters
+oneparam = {'texname':'', 'vary': True, 'value':1., 
+            'scale': 1., 'min':0., 'max':1.,
+            'best': np.array([np.nan, np.nan, np.nan])}
+variables = {'vs_n': copy.deepcopy(oneparam), 'am_n': copy.deepcopy(oneparam), 'fw_n': copy.deepcopy(oneparam), 
+             'vs_b': copy.deepcopy(oneparam), 'am_b': copy.deepcopy(oneparam), 'fw_b': copy.deepcopy(oneparam), 
+             'h1_col': copy.deepcopy(oneparam), 
+             'h1_b': copy.deepcopy(oneparam), 'h1_vel': copy.deepcopy(oneparam), 'd2h': copy.deepcopy(oneparam)}
 
+## Set values for each parameter
+p = 'vs_n'
+variables[p]['texname'] = r'$v_n$'
+variables[p]['value'] = 40.
+variables[p]['vary'] = True
+variables[p]['scale'] = 1.
+variables[p]['min'] = -100.
+variables[p]['max'] = 100.
+
+p = 'am_n'
+variables[p]['texname'] = r'$log A_n$'
+variables[p]['value'] = -13.6
+variables[p]['vary'] = True
+variables[p]['scale'] = 0.1
+variables[p]['min'] = -16.
+variables[p]['max'] = -12.
+
+p = 'fw_n'
+variables[p]['texname'] = r'$FW_n$'
+variables[p]['value'] = 220.
+variables[p]['vary'] = True
+variables[p]['scale'] = 5.
+variables[p]['min'] = 50.
+variables[p]['max'] = 275.
+
+p = 'vs_b'
+variables[p]['texname'] = r'$v_b$'
+variables[p]['value'] = 34.
+variables[p]['vary'] = True
+variables[p]['scale'] = 1.
+variables[p]['min'] = -100.
+variables[p]['max'] = 100.
+
+p = 'am_b'
+variables[p]['texname'] = r'$log A_b$'
+variables[p]['value'] = -13.68
+variables[p]['vary'] = True
+variables[p]['scale'] = 0.1
+variables[p]['min'] = -19.
+variables[p]['max'] = -13.
+variables[p]['single_comp'] = False
+
+p = 'fw_b'
+variables[p]['texname'] = r'$FW_b$'
+variables[p]['value'] = 547.
+variables[p]['vary'] = True
+variables[p]['scale'] = 50.
+variables[p]['min'] = 500.
+variables[p]['max'] = 2000.
+
+p = 'h1_col'
+variables[p]['texname'] = r'$log N(HI)$'
+variables[p]['value'] = 17.64
+variables[p]['vary'] = True
+variables[p]['scale'] = 0.2
+variables[p]['min'] = 16.
+variables[p]['max'] = 18.5
+
+p = 'h1_b' #  h1_b_true = 11.5 - for a T=8000 K standard ISM
+variables[p]['texname'] = r'$b$',
+variables[p]['value'] = 11.98
+variables[p]['vary'] = True
+variables[p]['scale'] = 0.2
+variables[p]['min'] = 1.
+variables[p]['max'] = 20.
+
+p = 'h1_vel'
+variables[p]['texname'] = r'$v_{HI}$'
+variables[p]['value'] = 29.3
+variables[p]['vary'] = False
+variables[p]['scale'] = 1.
+variables[p]['min'] = -50.
+variables[p]['max'] = 50.
+
+p = 'd2h' # Fixing the D/H ratio at 1.5e-5.  (Wood+ 2004 is the reference, I believe)
+variables[p]['texname'] = r'$D/H$'
+variables[p]['value'] = 1.5e-5
+variables[p]['vary'] = False
+variables[p]['scale'] = 0
+variables[p]['min'] = 1e-5
+variables[p]['max'] = 2e-5
+
+## This is the order of the parameters that the profile function needs!
+param_order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
 
 
 ##################
@@ -204,10 +235,7 @@ ndim = len(variable_names)
 if do_emcee:
     ## Change this value around sometimes
     np.random.seed(82)
-    
-    ## Fixing the D/H ratio at 1.5e-5.  (Wood+ 2004 is the reference, I believe)
-    d2h_true = 1.5e-5
-    
+        
     descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
     ## MCMC parameters
     nwalkers = 30
@@ -216,89 +244,65 @@ if do_emcee:
     # number steps included = nsteps - burnin
     
     
-    
-    
-    ## Defining parameter ranges. Above, we use uniform priors for most of the parameters (not h1_b) 
-    ## Need to add Gaussian prior examples.
-    vs_n_min = -100.
-    vs_n_max = 100.
-    am_n_min = -16.
-    am_n_max = -12.
-    fw_n_min = 50.
-    fw_n_max = 275.
-    vs_b_min = -100.
-    vs_b_max = 100.
-    am_b_min = -19.
-    am_b_max = -13.
-    fw_b_min = 500.
-    fw_b_max = 2000.
-    h1_col_min = 16.0
-    h1_col_max = 18.5
-    h1_b_min = 1.
-    h1_b_max = 20.
-    h1_vel_min = -50
-    h1_vel_max = 50.
-
-    ## Here should be defined any other parameters being fixed (e.g., h1_b_true = 11.5 - for a T=8000 K
-    ## standard ISM)
-    # h1_b_true = 11.5 # km/s
-    
-    
-    
-    
     # Set up the sampler. There are multiple ways to initialize the walkers,
     # and I chose uniform sampling of the parameter ranges.
-    if single_component_flux:
-        pos = [np.array([np.random.uniform(low=vs_n_min,high=vs_n_max,size=1)[0],
-                         np.random.uniform(low=am_n_min,high=am_n_max,size=1)[0],
-                         np.random.uniform(low=fw_n_min,high=fw_n_max,size=1)[0],
-                         np.random.uniform(low=h1_col_min,high=h1_col_max,size=1)[0],
-                         np.random.uniform(low=h1_b_min,high=h1_b_max,size=1)[0],
-                         np.random.uniform(low=h1_vel_min,high=h1_vel_max,size=1)[0]]) for i in range(nwalkers)]
-    else:
-        pos = [np.array([np.random.uniform(low=vs_n_min,high=vs_n_max,size=1)[0],
-                         np.random.uniform(low=am_n_min,high=am_n_max,size=1)[0],
-                         np.random.uniform(low=fw_n_min,high=fw_n_max,size=1)[0],
-                         np.random.uniform(low=vs_b_min,high=vs_b_max,size=1)[0],
-                         np.random.uniform(low=am_b_min,high=am_b_max,size=1)[0],
-                         np.random.uniform(low=fw_b_min,high=fw_b_max,size=1)[0],
-                         np.random.uniform(low=h1_col_min,high=h1_col_max,size=1)[0],
-                         np.random.uniform(low=h1_b_min,high=h1_b_max,size=1)[0],
-                         np.random.uniform(low=h1_vel_min,high=h1_vel_max,size=1)[0]]) for i in range(nwalkers)]
+
+    varyparams = [] # list of parameters that are being varied this run
+    theta, scale, mins, maxs = [], [], [], [] # to be filled with parameter values
     
-    ## Here is where you choose which lnprob function you want from above.
-    if single_component_flux:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob_single, args=(wave_to_fit,flux_to_fit,error_to_fit))
+    for p in param_order: # record if this parameter is being varied
+        if variables[p]['vary']:
+            varyparams.append(p)
+            theta.append(variables[p]['value'])
+            scale.append(variables[p]['scale'])
+            mins.append(variables[p]['min'])
+            maxs.append(variables[p]['max'])
+        else: # if parameter fixed, just record the starting value as the best value
+            variables[p]['best'][0] = variables[p]['value']  
+            
+    print "Varying: ", varyparams
+    for p in variables.keys():
+        print p, variables[p]['value']
+    ndim = len(varyparams)
+
+    if start_uniform:
+        pos = [np.random.uniform(low=mins, high=maxs) for i in range(nwalkers)]
     else:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit))
-        
-    
+        pos = [theta + scale*np.random.randn(ndim) for i in range (nwalkers)]
+
+    import time
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit,variables))
+
     
     # Clear and run the production chain.
     print("Running MCMC...")
+    start = time.time()
     sampler.run_mcmc(pos, nsteps, rstate0=np.random.get_state())
+    end = time.time()
     print("Done.")
+    print(end-start)
     
     
     ## remove the burn-in period from the sampler
     samples = sampler.chain[:, burnin:, :].reshape((-1, ndim))
+
     
-    
-    ## print best fit parameters + uncertainties. This section will need to be edited if you fix any
-    ## parameters or have some other unique modification to the parameters.
-    ## I like what Elisabeth has done here -- altering the _mcmc best fit values for parameters not 
-    ## included or held fixed here will allow the rest of the code to run smoothly.
-    if single_component_flux:
-        vs_b_mcmc, am_b_mcmc, fw_b_mcmc = [0., 0., 0.], [0., 0., 0.], [0., 0., 0.]
-        vs_n_mcmc, am_n_mcmc, fw_n_mcmc, h1_col_mcmc, h1_b_mcmc, \
-                                    h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
-                                    zip(*np.percentile(samples, [16, 50, 84], axis=0)))
-    else:
-        vs_n_mcmc, am_n_mcmc, fw_n_mcmc, vs_b_mcmc, am_b_mcmc, fw_b_mcmc, h1_col_mcmc, h1_b_mcmc, \
-                                    h1_vel_mcmc  = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
-                                    zip(*np.percentile(samples, [16, 50, 84], axis=0)))
-    
-    
+    ## extract the best fitting values
+    best = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
+                                zip(*np.percentile(samples, [16, 50, 84], axis=0)))
+                                
+    i = 0
+    for p in param_order:
+        if variables[p]['vary']:
+            variables[p]['best'] = best[i]
+            i = i+1
+            print p, variables[p]['best']
+
+    assert (i) == len(theta)
+
+
+    ## print best fit parameters + uncertainties.
+   
     print("""MCMC result:
         vs_n = {0[0]} +{0[1]} -{0[2]}
         am_n = {1[0]} +{1[1]} -{1[2]}
@@ -310,8 +314,10 @@ if do_emcee:
         h1_b = {7[0]} +{7[1]} -{7[2]}
         h1_vel = {8[0]} +{8[1]} -{8[2]}
     
-    """.format(vs_n_mcmc, am_n_mcmc, fw_n_mcmc, vs_b_mcmc, am_b_mcmc, fw_b_mcmc, h1_col_mcmc, 
-               h1_b_mcmc, h1_vel_mcmc))
+""".format( variables['vs_n']['best'], variables['am_n']['best'], variables['fw_n']['best'], 
+           variables['vs_b']['best'], variables['am_b']['best'], variables['fw_b']['best'], 
+           variables['h1_col']['best'], variables['h1_b']['best'], variables['h1_vel']['best'],
+           variables['d2h']['best'] ) )
     
     print("Mean acceptance fraction: {0:.3f}"
                     .format(np.mean(sampler.acceptance_fraction)))
@@ -320,14 +326,18 @@ if do_emcee:
     
     ## best fit intrinsic profile
     lya_intrinsic_profile_mcmc,lya_intrinsic_flux_mcmc = lyapy.lya_intrinsic_profile_func(wave_to_fit,
-             vs_n_mcmc[0],10**am_n_mcmc[0],fw_n_mcmc[0],vs_b_mcmc[0],10**am_b_mcmc[0],fw_b_mcmc[0],
-             return_flux=True, single_component_flux=single_component_flux)
+         variables['vs_n']['best'][0],10**variables['am_n']['best'][0],variables['fw_n']['best'][0],
+         variables['vs_b']['best'][0],10**variables['am_b']['best'][0],variables['fw_b']['best'][0],
+         return_flux=True, single_component_flux=variables['am_b']['single_comp'])
     
     ## best fit attenuated profile
-    model_best_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_mcmc[0],10.**am_n_mcmc[0],fw_n_mcmc[0],
-                                              vs_b_mcmc[0],10.**am_b_mcmc[0],fw_b_mcmc[0],h1_col_mcmc[0],
-                                              h1_b_mcmc[0],h1_vel_mcmc[0],d2h_true,resolution,
-                                              single_component_flux=single_component_flux)/1.e14
+    model_best_fit = lyapy.damped_lya_profile(wave_to_fit,
+         variables['vs_n']['best'][0],10**variables['am_n']['best'][0],variables['fw_n']['best'][0],
+         variables['vs_b']['best'][0],10**variables['am_b']['best'][0],variables['fw_b']['best'][0],
+         variables['h1_col']['best'][0], variables['h1_b']['best'][0],variables['h1_vel']['best'][0],
+         variables['d2h']['best'][0],
+         resolution,
+         single_component_flux=variables['am_b']['single_comp'])/1.e14
     
     
     ## Here's the big messy part where I determine the 1-sigma error bars on the
@@ -339,23 +349,9 @@ if do_emcee:
     ## of the reconstructed Lyα flux are taken by varying these parameters individually between 
     ## their 1-σ error bars and keeping all others fixed at their best-fit value. 
     ## The resulting minimum and maximum Lyα fluxes become the 1-σ error bars (Table 2)."
+       
     
-    lya_intrinsic_profile_limits = []  ## this is for showing the gray-shaded regions in my Figure 1
-    lya_intrinsic_flux_limits = [] ## this is for finding the 1-σ LyA flux error bars
-    
-    vs_n_limits = [vs_n_mcmc[0] + vs_n_mcmc[1], vs_n_mcmc[0] - vs_n_mcmc[2]]
-    am_n_limits = [am_n_mcmc[0] + am_n_mcmc[1], am_n_mcmc[0] - am_n_mcmc[2]]
-    fw_n_limits = [fw_n_mcmc[0] + fw_n_mcmc[1], fw_n_mcmc[0] - fw_n_mcmc[2]]
-    vs_b_limits = [vs_b_mcmc[0] + vs_b_mcmc[1], vs_b_mcmc[0] - vs_b_mcmc[2]]
-    am_b_limits = [am_b_mcmc[0] + am_b_mcmc[1], am_b_mcmc[0] - am_b_mcmc[2]]
-    fw_b_limits = [fw_b_mcmc[0] + fw_b_mcmc[1], fw_b_mcmc[0] - fw_b_mcmc[2]]
-    h1_col_limits = [h1_col_mcmc[0] + h1_col_mcmc[1], h1_col_mcmc[0] - h1_col_mcmc[2]]
-    h1_b_limits = [h1_b_mcmc[0] + h1_b_mcmc[1], h1_b_mcmc[0] - h1_b_mcmc[2]]
-    h1_vel_limits = [h1_vel_mcmc[0] + h1_vel_mcmc[1], h1_vel_mcmc[0] - h1_vel_mcmc[2]]
-    
-     
-    
-    lya_plot.walkers(sampler,burnin,variable_names)
-    lya_plot.corner(samples,variable_names)
+    lya_plot.walkers(sampler, variables, param_order, subset=False)
+    lya_plot.corner(samples, variables, param_order)
     lya_plot.profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
-                model_best_fit, lya_intrinsic_profile_mcmc, samples=samples, d2h_true = 1.5e-5)
+            model_best_fit, lya_intrinsic_profile_mcmc, variables, param_order, samples = samples)
