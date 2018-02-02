@@ -389,7 +389,7 @@ def tau_profile(ncols,vshifts,vdop,h1_or_d1):
     Ntot=10.**ncols  # column density of H I gas
     nlam=1000       # number of elements in the wavelength grid
     xsections_onesided=np.zeros(nlam)  # absorption cross sections as a 
-                                       # function of wavelength (one side of transition)
+                                       # fun<D-O>ction of wavelength (one side of transition)
     u_parameter=np.zeros(nlam)  # Voigt "u" parameter
     nu0s=ccgs/(lam0s*1e-8)  # wavelengths of Lyman alpha in frequency
     nuds=nu0s*vdop/c_km    # delta nus based off vdop parameter
@@ -470,5 +470,37 @@ def mask_spectrum(flux_to_fit,interactive=True,mask_lower_limit=None,mask_upper_
 
 
 
+def ready_stis_lsf(orig_lsf_wave,orig_lsf,stis_grating_disp,data_wave):
+
+  """ 
+  Using this function (output aa) will allow the user to use a STIS LSF
+  to convolve their model (lya_obs_high), so lyman_fit = np.convolve(lya_obs_high,aa,mode='same')
+  to match the resolution/resolving power of their data (lyman_fit)
+  orig_lsf_wave is the x array of the STIS LSF
+  orig_lsf is the y array of the STIS LSF
+  stis_grating_disp is the dispersion of the STIS grating for your chosen LSF (units: Ang/pix)
+  data_wave is the wavelength array of your data
+  """
+
+  data_wave_spacing = data_wave[1]-data_wave[0]
+  data_wave_length = len(data_wave)
+  lsf_lam_min = np.round(np.min(orig_lsf_wave*stis_grating_disp)/data_wave_spacing) * data_wave_spacing
+  lsf_lam_onesided = np.arange(lsf_lam_min,0,data_wave_spacing)  ### Make sure it's even and doesn't include zero
+  if len(lsf_lam_onesided) % 2 != 0:
+    lsf_lam_onesided = lsf_lam_onesided[1::] # get rid of the first element of the array
+
+  lsf_lam_flipped = lsf_lam_onesided[::-1]
+  lsf_lam_pluszero=np.append(lsf_lam_onesided,np.array([0]))
+  lsf_lam=np.append(lsf_lam_pluszero,lsf_lam_flipped) # should be odd
+
+  lsf_interp = np.interp(lsf_lam,orig_lsf_wave*stis_grating_disp,orig_lsf/np.sum(orig_lsf))
+  lsf_interp_norm = lsf_interp/np.sum(lsf_interp) # I don't know why I do np.sum() for normalization...
+
+  if data_wave_length < len(lsf_interp_norm):
+      lsf_interp_norm = np.delete(lsf_interp_norm,np.where(lsf_interp_norm == 0))
+      lsf_interp_norm = np.insert(lsf_interp_norm,0,0)
+      lsf_interp_norm = np.append(lsf_interp_norm,0)
+
+  return lsf_interp_norm
 
 
