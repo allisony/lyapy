@@ -6,23 +6,17 @@ import numpy as np
 import astropy.io.fits as pyfits
 import lya_plot
 import copy
-
-
 import matplotlib.pyplot as plt
 
 
-
-## Read in fits file ##
-input_filename = '../lyalpha/new_x1d_modAY.fits' #raw_input("Enter fits file name: ")
-input_filename = 'p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.0-1300.0_modAY.fits'
-
 ## Set fitting parameters
-do_emcee = True      # do MCMC fitting (no other options)
 start_uniform = True # starting positions for MCMC are uniform (alternate: Gaussian)
 single_component_switch = True
 # for single component flux, set variables['am_b']['single_comp'] = False
 
 ## Read in the data ##
+input_filename = '../lyalpha/new_x1d_modAY.fits' #raw_input("Enter fits file name: ")
+input_filename = 'p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.0-1300.0_modAY.fits'
 
 spec_hdu = pyfits.open(input_filename)
 spec = spec_hdu[1].data
@@ -32,6 +26,8 @@ spec_header = spec_hdu[1].header
 wave_to_fit = spec['wave']
 flux_to_fit = spec['flux']
 error_to_fit = spec['error']
+
+#### Define the resolution
 #resolution = 12200. ## a float here is the resolving power that will define the FWHM
                     ## of a Gaussian for convolution of the model. Currently done with
                     ## lyapy.make_kernel
@@ -171,133 +167,122 @@ param_order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b',
 ## EMCEE ##
 ##################
  
-if do_emcee:
-    ## Change this value around sometimes
-    np.random.seed(82)
+## Change this value around sometimes
+np.random.seed(82)
         
-    descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
-    ## MCMC parameters
-    nwalkers = 30
-    nsteps = 1000
-    burnin = 500
-    # number steps included = nsteps - burnin
+descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
+## MCMC parameters
+nwalkers = 30
+nsteps = 1000
+burnin = 500
+# number steps included = nsteps - burnin
     
     
-    # Set up the sampler. There are multiple ways to initialize the walkers,
-    # and I chose uniform sampling of the parameter ranges.
+# Set up the sampler. There are multiple ways to initialize the walkers,
+# and I chose uniform sampling of the parameter ranges.
 
-    varyparams = [] # list of parameters that are being varied this run
-    theta, scale, mins, maxs = [], [], [], [] # to be filled with parameter values
+varyparams = [] # list of parameters that are being varied this run
+theta, scale, mins, maxs = [], [], [], [] # to be filled with parameter values
     
-    for p in param_order: # record if this parameter is being varied
-        if variables[p]['vary']:
-            varyparams.append(p)
-            theta.append(variables[p]['value'])
-            scale.append(variables[p]['scale'])
-            mins.append(variables[p]['min'])
-            maxs.append(variables[p]['max'])
-        else: # if parameter fixed, just record the starting value as the best value
-            variables[p]['best'][0] = variables[p]['value']  
+for p in param_order: # record if this parameter is being varied
+    if variables[p]['vary']:
+        varyparams.append(p)
+        theta.append(variables[p]['value'])
+        scale.append(variables[p]['scale'])
+        mins.append(variables[p]['min'])
+        maxs.append(variables[p]['max'])
+    else: # if parameter fixed, just record the starting value as the best value
+        variables[p]['best'][0] = variables[p]['value']  
             
-    print "Varying: ", varyparams
-    for p in variables.keys():
-        print p, variables[p]['value']
-    ndim = len(varyparams)
+print "Varying: ", varyparams
+for p in variables.keys():
+    print p, variables[p]['value']
+ndim = len(varyparams)
 
-    if start_uniform:
-        pos = [np.random.uniform(low=mins, high=maxs) for i in range(nwalkers)]
-    else:
-        pos = [theta + scale*np.random.randn(ndim) for i in range (nwalkers)]
+if start_uniform:
+    pos = [np.random.uniform(low=mins, high=maxs) for i in range(nwalkers)]
+else:
+    pos = [theta + scale*np.random.randn(ndim) for i in range (nwalkers)]
 
-    import time
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lyapy.lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit,variables))
-
-    
-    # Clear and run the production chain.
-    print("Running MCMC...")
-    start = time.time()
-    sampler.run_mcmc(pos, nsteps, rstate0=np.random.get_state())
-    end = time.time()
-    print("Done.")
-    print(end-start)
-
-    ## checking the autocorrelation time to see if the chains have converged.
-    try:
-        acor = format(sampler.get_autocorr_time(low=10, high=None, step=1, c=5, fast=False))
-        print("Autocorrelation times = " + str(acor))
-    except emcee.autocorr.AutocorrError:
-        print("AutocorrError: The chain is too short to reliably estimate the autocorrelation time.")
-        print("You should re-run with a longer chain. Continuing.")
-    
-    ## remove the burn-in period from the sampler
-    samples = sampler.chain[:, burnin:, :].reshape((-1, ndim))
+import time
+sampler = emcee.EnsembleSampler(nwalkers, ndim, lyapy.lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit,variables))
 
     
-    ## extract the best fitting values
-    best = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
-                                zip(*np.percentile(samples, [16, 50, 84], axis=0)))
+# Clear and run the production chain.
+print("Running MCMC...")
+start = time.time()
+sampler.run_mcmc(pos, nsteps, rstate0=np.random.get_state())
+end = time.time()
+print("Done.")
+print(end-start)
+
+## checking the autocorrelation time to see if the chains have converged.
+try:
+    acor = format(sampler.get_autocorr_time(low=10, high=None, step=1, c=5, fast=False))
+    print("Autocorrelation times = " + str(acor))
+except emcee.autocorr.AutocorrError:
+    print("AutocorrError: The chain is too short to reliably estimate the autocorrelation time.")
+    print("You should re-run with a longer chain. Continuing.")
+    
+## remove the burn-in period from the sampler
+samples = sampler.chain[:, burnin:, :].reshape((-1, ndim))
+
+    
+## extract the best fitting values
+best = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
+                            zip(*np.percentile(samples, [16, 50, 84], axis=0)))
                                 
-    i = 0
-    for p in param_order:
-        if variables[p]['vary']:
-            variables[p]['best'] = best[i]
-            i = i+1
-            print p, variables[p]['best']
+i = 0
+for p in param_order:
+    if variables[p]['vary']:
+        variables[p]['best'] = best[i]
+        i = i+1
+        print p, variables[p]['best']
 
-    assert (i) == len(theta)
+assert (i) == len(theta)
 
 
-    ## print best fit parameters + uncertainties.
+## print best fit parameters + uncertainties.
    
-    print("""MCMC result:
-        vs_n = {0[0]} +{0[1]} -{0[2]}
-        am_n = {1[0]} +{1[1]} -{1[2]}
-        fw_n = {2[0]} +{2[1]} -{2[2]}
-        vs_b = {3[0]} +{3[1]} -{3[2]}
-        am_b = {4[0]} +{4[1]} -{4[2]}
-        fw_b = {5[0]} +{5[1]} -{5[2]}
-        h1_col = {6[0]} +{6[1]} -{6[2]}
-        h1_b = {7[0]} +{7[1]} -{7[2]}
-        h1_vel = {8[0]} +{8[1]} -{8[2]}
+print("""MCMC result:
+    vs_n = {0[0]} +{0[1]} -{0[2]}
+    am_n = {1[0]} +{1[1]} -{1[2]}
+    fw_n = {2[0]} +{2[1]} -{2[2]}
+    vs_b = {3[0]} +{3[1]} -{3[2]}
+    am_b = {4[0]} +{4[1]} -{4[2]}
+    fw_b = {5[0]} +{5[1]} -{5[2]}
+    h1_col = {6[0]} +{6[1]} -{6[2]}
+    h1_b = {7[0]} +{7[1]} -{7[2]}
+    h1_vel = {8[0]} +{8[1]} -{8[2]}
     
 """.format( variables['vs_n']['best'], variables['am_n']['best'], variables['fw_n']['best'], 
            variables['vs_b']['best'], variables['am_b']['best'], variables['fw_b']['best'], 
            variables['h1_col']['best'], variables['h1_b']['best'], variables['h1_vel']['best'],
            variables['d2h']['best'] ) )
     
-    print("Mean acceptance fraction: {0:.3f}"
-                    .format(np.mean(sampler.acceptance_fraction)))
-    print("should be between 0.25 and 0.5")
+print("Mean acceptance fraction: {0:.3f}"
+                .format(np.mean(sampler.acceptance_fraction)))
+print("should be between 0.25 and 0.5")
     
     
-    ## best fit intrinsic profile
-    lya_intrinsic_profile_mcmc,lya_intrinsic_flux_mcmc = lyapy.lya_intrinsic_profile_func(wave_to_fit,
-         variables['vs_n']['best'][0],10**variables['am_n']['best'][0],variables['fw_n']['best'][0],
-         variables['vs_b']['best'][0],10**variables['am_b']['best'][0],variables['fw_b']['best'][0],
-         return_flux=True, single_component_flux=variables['am_b']['single_comp'])
+## best fit intrinsic profile
+lya_intrinsic_profile_mcmc,lya_intrinsic_flux_mcmc = lyapy.lya_intrinsic_profile_func(wave_to_fit,
+        variables['vs_n']['best'][0],10**variables['am_n']['best'][0],variables['fw_n']['best'][0],
+        variables['vs_b']['best'][0],10**variables['am_b']['best'][0],variables['fw_b']['best'][0],
+        return_flux=True, single_component_flux=variables['am_b']['single_comp'])
     
-    ## best fit attenuated profile
-    model_best_fit = lyapy.damped_lya_profile(wave_to_fit,
-         variables['vs_n']['best'][0],10**variables['am_n']['best'][0],variables['fw_n']['best'][0],
-         variables['vs_b']['best'][0],10**variables['am_b']['best'][0],variables['fw_b']['best'][0],
-         variables['h1_col']['best'][0], variables['h1_b']['best'][0],variables['h1_vel']['best'][0],
-         variables['d2h']['best'][0],
-         resolution,
-         single_component_flux=variables['am_b']['single_comp'])/1.e14
+## best fit attenuated profile
+model_best_fit = lyapy.damped_lya_profile(wave_to_fit,
+        variables['vs_n']['best'][0],10**variables['am_n']['best'][0],variables['fw_n']['best'][0],
+        variables['vs_b']['best'][0],10**variables['am_b']['best'][0],variables['fw_b']['best'][0],
+        variables['h1_col']['best'][0], variables['h1_b']['best'][0],variables['h1_vel']['best'][0],
+        variables['d2h']['best'][0],
+        resolution,
+        single_component_flux=variables['am_b']['single_comp'])/1.e14
     
-    
-    ## Here's the big messy part where I determine the 1-sigma error bars on the
-    ## reconstructed, intrinsic LyA flux. From my paper: "For each of the 9 parameters, 
-    ## the best-fit values are taken as the 50th percentile (the median) of the marginalized 
-    ## distributions, and 1-σ error bars as the 16th and 84th percentiles (shown as dashed 
-    ## vertical lines in Figures 3 and 4). The best-fit reconstructed Lyα fluxes are determined 
-    ## from the best-fit amplitude, FWHM, and velocity centroid parameters, and the 1-σ error bars
-    ## of the reconstructed Lyα flux are taken by varying these parameters individually between 
-    ## their 1-σ error bars and keeping all others fixed at their best-fit value. 
-    ## The resulting minimum and maximum Lyα fluxes become the 1-σ error bars (Table 2)."
-       
-    
-    lya_plot.walkers(sampler, variables, param_order, subset=False)
-    lya_plot.corner(samples, variables, param_order)
-    lya_plot.profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
-            model_best_fit, lya_intrinsic_profile_mcmc, variables, param_order, samples = samples)
+           
+## Call the plots 
+lya_plot.walkers(sampler, variables, param_order, subset=False)
+lya_plot.corner(samples, variables, param_order)
+lya_plot.profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
+        model_best_fit, lya_intrinsic_profile_mcmc, variables, param_order, samples = samples)
