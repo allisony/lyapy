@@ -76,14 +76,20 @@ spec_header = spec_hdu[1].header
 wave_to_fit = spec['wave']
 flux_to_fit = spec['flux']
 error_to_fit = spec['error']
-resolution = 12200.
+#resolution = 12200. ## a float here is the resolving power that will define the FWHM
+                    ## of a Gaussian for convolution of the model. Currently done with
+                    ## lyapy.make_kernel
 #resolution = spec_hdu[0].header['SPECRES']
 
-## 17 Jan 2018 - To Do: add in option to use STIS LSF from STScI's website. Need toggles for grating
-## and slit. Allison has pasted her code here for later incorporation either here or in lyapy.py. Example use:
-#stis_lsf = np.loadtxt('STIS_G140L_LSF.dat',skiprows=2) # HIP 23309 52X0.1 G140L
-#kernel_for_convolution = ready_stis_lsf(stis_lsf[:,0],stis_lsf[:,1],0.6,wave_to_fit[mask])
-
+## If you want to use one of the LSF's from STScI's website, currently you must download it locally
+## as a text file and read it in here. Comment the next 5 lines out if not using this, and set 
+## the resolution keyword to a float.
+lsf_filename = 'STIS_G140M_LSF.dat'
+stis_lsf = np.loadtxt(lsf_filename,skiprows=2) # 52X0.1 G140M
+stis_dispersion = wave_to_fit[1]-wave_to_fit[0] # can either set this keyword manually, or derive it 
+                                                # from the data.
+kernel_for_convolution = lyapy.ready_stis_lsf(stis_lsf[:,0],stis_lsf[:,1],stis_dispersion,wave_to_fit)
+resolution = kernel_for_convolution.copy()
 
 
 ## This part is just making sure the error bars in the low-flux wings aren't smaller than the RMS 

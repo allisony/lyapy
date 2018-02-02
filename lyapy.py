@@ -318,8 +318,12 @@ def damped_lya_profile(wave_to_fit,vs_n,am_n,fw_n,vs_b,am_b,fw_b,h1_col,h1_b,
     lya_obs_high = lya_intrinsic_profile * total_tau_profile
 
     ## Convolving the data ##
-    fw = lya_rest/resolution
-    aa = make_kernel(grid=wave_to_fit,fwhm=fw)
+    if type(resolution) is not float:
+      aa = np.copy(resolution)
+    else:
+      fw = lya_rest/resolution
+      aa = make_kernel(grid=wave_to_fit,fwhm=fw)
+
     lyman_fit = np.convolve(lya_obs_high,aa,mode='same')
 
     return lyman_fit*1e14
@@ -336,8 +340,12 @@ def damped_lya_profile_shortcut(wave_to_fit,resolution,lya_intrinsic_profile,tot
     lya_obs_high = lya_intrinsic_profile * total_tau_profile
 
     ## Convolving the data ##
-    fw = lya_rest/resolution
-    aa = make_kernel(grid=wave_to_fit,fwhm=fw)
+    if type(resolution) is not float:
+      aa = np.copy(resolution)
+    else:
+      fw = lya_rest/resolution
+      aa = make_kernel(grid=wave_to_fit,fwhm=fw)
+
     lyman_fit = np.convolve(lya_obs_high,aa,mode='same')
 
     return lyman_fit*1e14
@@ -480,6 +488,7 @@ def ready_stis_lsf(orig_lsf_wave,orig_lsf,stis_grating_disp,data_wave):
   orig_lsf is the y array of the STIS LSF
   stis_grating_disp is the dispersion of the STIS grating for your chosen LSF (units: Ang/pix)
   data_wave is the wavelength array of your data
+
   """
 
   data_wave_spacing = data_wave[1]-data_wave[0]
