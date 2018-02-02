@@ -7,12 +7,31 @@ import astropy.io.fits as pyfits
 import lya_plot
 import copy
 import matplotlib.pyplot as plt
+import time
 
+#########################
+#                       #
+# Top-Level Parameters  #
+#                       #
+#########################
 
-## Set fitting parameters
+descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
+
+nwalkers = 30
+nsteps = 1000
+burnin = 500
+
+np.random.seed(82) ## Change this value around sometimes
+
 start_uniform = True # starting positions for MCMC are uniform (alternate: Gaussian)
 single_component_switch = True
 # for single component flux, set variables['am_b']['single_comp'] = False
+
+##############################
+#                            #
+# Setting up the data to fit #
+#                            #
+##############################
 
 ## Read in the data ##
 input_filename = '../lyalpha/new_x1d_modAY.fits' #raw_input("Enter fits file name: ")
@@ -56,7 +75,12 @@ wave_masked = np.transpose(np.ma.masked_array(spec['wave'],mask=mask))
 error_masked = np.transpose(np.ma.masked_array(spec['error'],mask=mask))
 
 
-## Here, set up the dictionary of parameters, their values, and their ranges
+##########################################################################
+#                                                                        #
+# Setting up the dictionary of parameters, their values and their ranges #
+#                                                                        #
+##########################################################################
+
 
 ## Create the dictionary of parameters
 oneparam = {'texname':'', 'vary': True, 'value':1., 
@@ -163,23 +187,12 @@ variables[p]['resolution'] = resolution
 param_order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
 
 
-##################
-## EMCEE ##
-##################
  
-## Change this value around sometimes
-np.random.seed(82)
-        
-descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
-## MCMC parameters
-nwalkers = 30
-nsteps = 1000
-burnin = 500
-# number steps included = nsteps - burnin
-    
-    
-# Set up the sampler. There are multiple ways to initialize the walkers,
-# and I chose uniform sampling of the parameter ranges.
+#################
+#               # 
+# Sampler setup #
+#               #
+#################    
 
 varyparams = [] # list of parameters that are being varied this run
 theta, scale, mins, maxs = [], [], [], [] # to be filled with parameter values
@@ -199,14 +212,18 @@ for p in variables.keys():
     print p, variables[p]['value']
 ndim = len(varyparams)
 
-if start_uniform:
+if start_uniform: 
     pos = [np.random.uniform(low=mins, high=maxs) for i in range(nwalkers)]
 else:
     pos = [theta + scale*np.random.randn(ndim) for i in range (nwalkers)]
 
-import time
 sampler = emcee.EnsembleSampler(nwalkers, ndim, lyapy.lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit,variables))
 
+######################
+#                    #
+# PERFORM THE EMCEE  #
+#                    #
+######################
     
 # Clear and run the production chain.
 print("Running MCMC...")
@@ -214,24 +231,24 @@ start = time.time()
 sampler.run_mcmc(pos, nsteps, rstate0=np.random.get_state())
 end = time.time()
 print("Done.")
-print(end-start)
+print("Time to complete MCMC: {0:.1f} seconds"
+                .format(end-start))
 
-## checking the autocorrelation time to see if the chains have converged.
-try:
-    acor = format(sampler.get_autocorr_time(low=10, high=None, step=1, c=5, fast=False))
-    print("Autocorrelation times = " + str(acor))
-except emcee.autocorr.AutocorrError:
-    print("AutocorrError: The chain is too short to reliably estimate the autocorrelation time.")
-    print("You should re-run with a longer chain. Continuing.")
+
+#####################################
+#                                   #
+# Extract best fit values and print #
+#                                   #
+#####################################
     
 ## remove the burn-in period from the sampler
 samples = sampler.chain[:, burnin:, :].reshape((-1, ndim))
-
     
 ## extract the best fitting values
 best = map(lambda v: [v[1], v[2]-v[1], v[1]-v[0]], \
                             zip(*np.percentile(samples, [16, 50, 84], axis=0)))
-                                
+
+## assign to variables dictionary
 i = 0
 for p in param_order:
     if variables[p]['vary']:
@@ -242,7 +259,7 @@ for p in param_order:
 assert (i) == len(theta)
 
 
-## print best fit parameters + uncertainties.
+## print best fit parameters + uncertainties to command line
    
 print("""MCMC result:
     vs_n = {0[0]} +{0[1]} -{0[2]}
@@ -259,11 +276,34 @@ print("""MCMC result:
            variables['vs_b']['best'], variables['am_b']['best'], variables['fw_b']['best'], 
            variables['h1_col']['best'], variables['h1_b']['best'], variables['h1_vel']['best'],
            variables['d2h']['best'] ) )
-    
+
+
+##################################################################
+#                                                                #
+# Diagnostics: autocorrelation time and mean acceptance fraction #
+#                                                                #
+##################################################################
+
+## checking the autocorrelation time to see if the chains have converged.
+try:
+    acor = format(sampler.get_autocorr_time(low=10, high=None, step=1, c=5, fast=False))
+    print("Autocorrelation times = " + str(acor))
+except emcee.autocorr.AutocorrError:
+    print("AutocorrError: The chain is too short to reliably estimate the autocorrelation time.")
+    print("You should re-run with a longer chain. Continuing.")
+
+## printing the mean acceptance fraction
 print("Mean acceptance fraction: {0:.3f}"
                 .format(np.mean(sampler.acceptance_fraction)))
 print("should be between 0.25 and 0.5")
+
     
+ 
+################################### 
+#                                 #
+# Calculate the best fit profiles #
+#                                 #
+###################################
     
 ## best fit intrinsic profile
 lya_intrinsic_profile_mcmc,lya_intrinsic_flux_mcmc = lyapy.lya_intrinsic_profile_func(wave_to_fit,
@@ -280,8 +320,12 @@ model_best_fit = lyapy.damped_lya_profile(wave_to_fit,
         resolution,
         single_component_flux=variables['am_b']['single_comp'])/1.e14
     
-           
-## Call the plots 
+##############################
+#                            #
+# Calling the plot functions #
+#                            #
+##############################
+
 lya_plot.walkers(sampler, variables, param_order, subset=False)
 lya_plot.corner(samples, variables, param_order)
 lya_plot.profile(wave_to_fit, flux_to_fit, error_to_fit, resolution, 
