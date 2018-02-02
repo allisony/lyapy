@@ -11,50 +11,6 @@ import copy
     
 import matplotlib.pyplot as plt
 
-## Define priors and likelihoods, where parameters are fixed
-def lnprior(theta, minmax):
-    assert len(theta) == len(minmax)
-    
-    for i in range(len(theta)):
-        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
-            return -np.inf
-    # ... no parameter was out of range
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
-    return np.log(h1_b)
-
-def lnlike(theta, x, y, yerr, singcomp=False):
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
-    y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
-                                       h1_b,h1_vel,d2h=d2h,resolution=resolution,
-                                       single_component_flux=singcomp)/1e14
-
-    return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
-
-def lnprob(theta, x, y, yerr, variables):
-    order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
-    theta_all = []
-    range_all = []
-    i = 0
-    for p in order:
-        range_all.append( [variables[p]['min'],variables[p]['max']] )
-        if variables[p]['vary']:
-            theta_all.append(theta[i])
-            i = i+1
-        else:
-            theta_all.append(variables[p]['value'])
-                
-    assert (i) == len(theta)
-    lp = lnprior(theta_all, range_all)
-    if not np.isfinite(lp):
-        return -np.inf
-
-    #if np.random.uniform() > 0.9995: print "took a step!", theta_all
-    ll = lnlike(theta_all, x, y, yerr, singcomp = variables['am_b']['single_comp'])
-    return lp + ll
-
-
-## Could include an example for how to change any of these to a Gaussian prior
-
 
 
 ## Read in fits file ##
@@ -90,7 +46,6 @@ stis_dispersion = wave_to_fit[1]-wave_to_fit[0] # can either set this keyword ma
                                                 # from the data.
 kernel_for_convolution = lyapy.ready_stis_lsf(stis_lsf[:,0],stis_lsf[:,1],stis_dispersion,wave_to_fit)
 resolution = kernel_for_convolution.copy()
-
 
 ## This part is just making sure the error bars in the low-flux wings aren't smaller than the RMS 
 ## in the wings
@@ -197,6 +152,7 @@ variables[p]['vary'] = False
 variables[p]['scale'] = 0
 variables[p]['min'] = 1e-5
 variables[p]['max'] = 2e-5
+variables[p]['resolution'] = resolution
 
 ## This is the order of the parameters that the profile function needs!
 param_order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
@@ -213,7 +169,7 @@ if do_emcee:
     descrip = '_d2h_fixed' ## appended to saved files throughout - this is probably not necessary anymore.
     ## MCMC parameters
     nwalkers = 30
-    nsteps = 5000
+    nsteps = 1000
     burnin = 500
     # number steps included = nsteps - burnin
     
@@ -245,7 +201,7 @@ if do_emcee:
         pos = [theta + scale*np.random.randn(ndim) for i in range (nwalkers)]
 
     import time
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit,variables))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lyapy.lnprob, args=(wave_to_fit,flux_to_fit,error_to_fit,variables))
 
     
     # Clear and run the production chain.
