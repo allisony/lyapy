@@ -7,6 +7,7 @@ import astropy.io.fits as pyfits
 import lya_plot
 import copy    
 import matplotlib.pyplot as plt
+import time
 
 ## Define priors and likelihoods, where parameters are fixed
 def lnprior(theta, minmax, prior_Gauss, prior_list):
@@ -152,7 +153,6 @@ variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
 
-
 p = 'fw_n'
 variables[p]['texname'] = r'$FW_n$'
 variables[p]['value'] = 220.
@@ -164,7 +164,6 @@ variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
 
-
 p = 'vs_b'
 variables[p]['texname'] = r'$v_b$'
 variables[p]['value'] = 34.
@@ -175,7 +174,6 @@ variables[p]['max'] = 100.
 variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
-
 
 p = 'am_b'
 variables[p]['texname'] = r'$log A_b$'
@@ -189,7 +187,6 @@ variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
 
-
 p = 'fw_b'
 variables[p]['texname'] = r'$FW_b$'
 variables[p]['value'] = 547.
@@ -200,7 +197,6 @@ variables[p]['max'] = 2000.
 variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
-
 
 p = 'h1_col'
 variables[p]['texname'] = r'$log N(HI)$'
@@ -213,7 +209,6 @@ variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
 
-
 p = 'h1_b' #  h1_b_true = 11.5 - for a T=8000 K standard ISM
 variables[p]['texname'] = r'$b$',
 variables[p]['value'] = 11.98
@@ -225,7 +220,6 @@ variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
 
-
 p = 'h1_vel'
 variables[p]['texname'] = r'$v_{HI}$'
 variables[p]['value'] = 29.3
@@ -233,10 +227,9 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 1.
 variables[p]['min'] = -50.
 variables[p]['max'] = 50.
-variables[p]['Gaussian prior'] = True
-variables[p]['prior mean'] = 29.3
-variables[p]['prior stddev'] = 5.0
-
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'd2h' # Fixing the D/H ratio at 1.5e-5.  (Wood+ 2004 is the reference, I believe)
 variables[p]['texname'] = r'$D/H$'
