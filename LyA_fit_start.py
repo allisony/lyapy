@@ -5,22 +5,29 @@ import emcee
 import numpy as np
 import astropy.io.fits as pyfits
 import lya_plot
-import copy
-
-## 17 Jan 2018 - To Do: add example for Gaussian priors.
-    
+import copy    
 import matplotlib.pyplot as plt
 
 ## Define priors and likelihoods, where parameters are fixed
-def lnprior(theta, minmax):
+def lnprior(theta, minmax, prior_Gauss, prior_list):
     assert len(theta) == len(minmax)
+
+    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
     
+    priors = 0
     for i in range(len(theta)):
         if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
             return -np.inf
+        if prior_Gauss[i]: # Gaussian prior, else uniform prior (0 or np.log(h1_b))
+            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
+        elif (i == 7) and not prior_Gauss[7]: # h1_b
+            priors += np.log(h1_b)
+        else:
+            priors += 0 # not necessary, just included for clarity/completeness
+            
     # ... no parameter was out of range
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
-    return np.log(h1_b)
+    
+    return priors
 
 def lnlike(theta, x, y, yerr, singcomp=False):
     vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
@@ -34,6 +41,8 @@ def lnprob(theta, x, y, yerr, variables):
     order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
     theta_all = []
     range_all = []
+    prior_Gauss = [] # Boolean list for whether or not the parameter has a Gaussian prior
+    prior_list = []
     i = 0
     for p in order:
         range_all.append( [variables[p]['min'],variables[p]['max']] )
@@ -42,9 +51,15 @@ def lnprob(theta, x, y, yerr, variables):
             i = i+1
         else:
             theta_all.append(variables[p]['value'])
+        if variables[p]['Gaussian prior']:
+            prior_Gauss.append(True)
+            prior_list.append([variables[p]['prior mean'],variables[p]['prior stddev']])
+        else:
+            prior_Gauss.append(False)
+            prior_list.append(0)
                 
     assert (i) == len(theta)
-    lp = lnprior(theta_all, range_all)
+    lp = lnprior(theta_all, range_all, prior_Gauss, prior_list)
     if not np.isfinite(lp):
         return -np.inf
 
@@ -52,8 +67,6 @@ def lnprob(theta, x, y, yerr, variables):
     ll = lnlike(theta_all, x, y, yerr, singcomp = variables['am_b']['single_comp'])
     return lp + ll
 
-
-## Could include an example for how to change any of these to a Gaussian prior
 
 
 
@@ -124,6 +137,9 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 1.
 variables[p]['min'] = -100.
 variables[p]['max'] = 100.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'am_n'
 variables[p]['texname'] = r'$log A_n$'
@@ -132,6 +148,10 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 0.1
 variables[p]['min'] = -16.
 variables[p]['max'] = -12.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 p = 'fw_n'
 variables[p]['texname'] = r'$FW_n$'
@@ -140,6 +160,10 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 5.
 variables[p]['min'] = 50.
 variables[p]['max'] = 275.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 p = 'vs_b'
 variables[p]['texname'] = r'$v_b$'
@@ -148,6 +172,10 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 1.
 variables[p]['min'] = -100.
 variables[p]['max'] = 100.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 p = 'am_b'
 variables[p]['texname'] = r'$log A_b$'
@@ -157,6 +185,10 @@ variables[p]['scale'] = 0.1
 variables[p]['min'] = -19.
 variables[p]['max'] = -13.
 variables[p]['single_comp'] = False
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 p = 'fw_b'
 variables[p]['texname'] = r'$FW_b$'
@@ -165,6 +197,10 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 50.
 variables[p]['min'] = 500.
 variables[p]['max'] = 2000.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 p = 'h1_col'
 variables[p]['texname'] = r'$log N(HI)$'
@@ -173,6 +209,10 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 0.2
 variables[p]['min'] = 16.
 variables[p]['max'] = 18.5
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 p = 'h1_b' #  h1_b_true = 11.5 - for a T=8000 K standard ISM
 variables[p]['texname'] = r'$b$',
@@ -181,14 +221,22 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 0.2
 variables[p]['min'] = 1.
 variables[p]['max'] = 20.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 p = 'h1_vel'
 variables[p]['texname'] = r'$v_{HI}$'
 variables[p]['value'] = 29.3
-variables[p]['vary'] = False
+variables[p]['vary'] = True
 variables[p]['scale'] = 1.
 variables[p]['min'] = -50.
 variables[p]['max'] = 50.
+variables[p]['Gaussian prior'] = True
+variables[p]['prior mean'] = 29.3
+variables[p]['prior stddev'] = 5.0
+
 
 p = 'd2h' # Fixing the D/H ratio at 1.5e-5.  (Wood+ 2004 is the reference, I believe)
 variables[p]['texname'] = r'$D/H$'
@@ -197,6 +245,10 @@ variables[p]['vary'] = False
 variables[p]['scale'] = 0
 variables[p]['min'] = 1e-5
 variables[p]['max'] = 2e-5
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
+
 
 ## This is the order of the parameters that the profile function needs!
 param_order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
