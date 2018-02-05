@@ -208,10 +208,10 @@ variables[p]['vary'] = False
 variables[p]['scale'] = 0
 variables[p]['min'] = 1e-5
 variables[p]['max'] = 2e-5
-variables[p]['resolution'] = resolution
 variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
+variables[p]['resolution'] = resolution
 
 ## This is the order of the parameters that the profile function needs!
 param_order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
