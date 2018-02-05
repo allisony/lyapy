@@ -99,6 +99,9 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 1.
 variables[p]['min'] = -100.
 variables[p]['max'] = 100.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'am_n'
 variables[p]['texname'] = r'$log A_n$'
@@ -107,6 +110,9 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 0.1
 variables[p]['min'] = -16.
 variables[p]['max'] = -12.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'fw_n'
 variables[p]['texname'] = r'$FW_n$'
@@ -115,6 +121,9 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 5.
 variables[p]['min'] = 50.
 variables[p]['max'] = 275.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'vs_b'
 variables[p]['texname'] = r'$v_b$'
@@ -126,6 +135,9 @@ else:
 variables[p]['scale'] = 1.
 variables[p]['min'] = -100.
 variables[p]['max'] = 100.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'am_b'
 variables[p]['texname'] = r'$log A_b$'
@@ -138,6 +150,9 @@ variables[p]['scale'] = 0.1
 variables[p]['min'] = -19.
 variables[p]['max'] = -13.
 variables[p]['single_comp'] = single_component_switch
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'fw_b'
 variables[p]['texname'] = r'$FW_b$'
@@ -149,6 +164,9 @@ else:
 variables[p]['scale'] = 50.
 variables[p]['min'] = 500.
 variables[p]['max'] = 2000.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'h1_col'
 variables[p]['texname'] = r'$log N(HI)$'
@@ -157,6 +175,9 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 0.2
 variables[p]['min'] = 16.
 variables[p]['max'] = 18.5
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'h1_b' #  h1_b_true = 11.5 - for a T=8000 K standard ISM
 variables[p]['texname'] = r'$b$',
@@ -165,6 +186,9 @@ variables[p]['vary'] = True
 variables[p]['scale'] = 0.2
 variables[p]['min'] = 1.
 variables[p]['max'] = 20.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'h1_vel'
 variables[p]['texname'] = r'$v_{HI}$'
@@ -173,6 +197,9 @@ variables[p]['vary'] = False
 variables[p]['scale'] = 1.
 variables[p]['min'] = -50.
 variables[p]['max'] = 50.
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 p = 'd2h' # Fixing the D/H ratio at 1.5e-5.  (Wood+ 2004 is the reference, I believe)
 variables[p]['texname'] = r'$D/H$'
@@ -182,6 +209,9 @@ variables[p]['scale'] = 0
 variables[p]['min'] = 1e-5
 variables[p]['max'] = 2e-5
 variables[p]['resolution'] = resolution
+variables[p]['Gaussian prior'] = False
+variables[p]['prior mean'] = 0
+variables[p]['prior stddev'] = 0
 
 ## This is the order of the parameters that the profile function needs!
 param_order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
