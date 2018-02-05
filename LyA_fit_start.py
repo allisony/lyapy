@@ -79,6 +79,7 @@ input_filename = 'p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.
 do_emcee = True      # do MCMC fitting (no other options)
 start_uniform = True # starting positions for MCMC are uniform (alternate: Gaussian)
 # for single component flux, set variables['am_b']['single_comp'] = False
+single_component_switch = False
 
 ## Read in the data ##
 
@@ -167,7 +168,10 @@ variables[p]['prior stddev'] = 0
 p = 'vs_b'
 variables[p]['texname'] = r'$v_b$'
 variables[p]['value'] = 34.
-variables[p]['vary'] = True
+if single_component_switch == False:
+  variables[p]['vary'] = True
+else:
+  variables[p]['vary'] = False
 variables[p]['scale'] = 1.
 variables[p]['min'] = -100.
 variables[p]['max'] = 100.
@@ -178,11 +182,14 @@ variables[p]['prior stddev'] = 0
 p = 'am_b'
 variables[p]['texname'] = r'$log A_b$'
 variables[p]['value'] = -13.68
-variables[p]['vary'] = True
+if single_component_switch == False:
+  variables[p]['vary'] = True
+else:
+  variables[p]['vary'] = False
 variables[p]['scale'] = 0.1
 variables[p]['min'] = -19.
 variables[p]['max'] = -13.
-variables[p]['single_comp'] = False
+variables[p]['single_comp'] = single_component_switch
 variables[p]['Gaussian prior'] = False
 variables[p]['prior mean'] = 0
 variables[p]['prior stddev'] = 0
@@ -190,7 +197,10 @@ variables[p]['prior stddev'] = 0
 p = 'fw_b'
 variables[p]['texname'] = r'$FW_b$'
 variables[p]['value'] = 547.
-variables[p]['vary'] = True
+if single_component_switch == False:
+  variables[p]['vary'] = True
+else:
+  variables[p]['vary'] = False
 variables[p]['scale'] = 50.
 variables[p]['min'] = 500.
 variables[p]['max'] = 2000.
