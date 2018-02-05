@@ -533,9 +533,9 @@ def lnprior(theta, minmax, prior_Gauss, prior_list):
     
     return priors
 
-def lnlike(theta, x, y, yerr, singcomp=False):
+def lnlike(theta, x, y, yerr, resolution, singcomp=False):
     vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
-    y_model = lyapy.damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
+    y_model = damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
                                        h1_b,h1_vel,d2h=d2h,resolution=resolution,
                                        single_component_flux=singcomp)/1e14
 
@@ -568,6 +568,7 @@ def lnprob(theta, x, y, yerr, variables):
         return -np.inf
 
     #if np.random.uniform() > 0.9995: print "took a step!", theta_all
-    ll = lnlike(theta_all, x, y, yerr, singcomp = variables['am_b']['single_comp'])
+    ll = lnlike(theta_all, x, y, yerr, resolution = variables['d2h']['resolution'],
+                                       singcomp = variables['am_b']['single_comp'])
     return lp + ll
 
