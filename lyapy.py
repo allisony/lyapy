@@ -350,7 +350,6 @@ def damped_lya_profile_shortcut(wave_to_fit,resolution,lya_intrinsic_profile,tot
 
     return lyman_fit*1e14
 
-
 def make_kernel(grid,fwhm,nfwhm=4.):
 
     """
@@ -535,11 +534,21 @@ def lnprior(theta, minmax, prior_Gauss, prior_list):
 
 def lnlike(theta, x, y, yerr, resolution, singcomp=False):
     vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
-    y_model = damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
-                                       h1_b,h1_vel,d2h=d2h,resolution=resolution,
-                                       single_component_flux=singcomp)/1e14
+    #y_model = damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
+    #                                   h1_b,h1_vel,d2h=d2h,resolution=resolution,
+    #                                   single_component_flux=singcomp)/1e14
+    intr_profile = lya_intrinsic_profile_func(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,
+                   single_component_flux=singcomp)
+    tau = total_tau_profile_func(x,h1_col,h1_b,h1_vel,d2h=d2h)
+    y_model = damped_lya_profile_shortcut(x,resolution,intr_profile,tau)/1e14
 
     return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
+
+## add a new function that is very similar to damped_lya_profile_shortcut - or just
+## modify lnprob or whatever to intake damped_lya_profile_shortcut instead of damped_lya_profile.
+## Then create lya_intrinsic_profile from multiple calls to lya_intrinsic_profile_func
+#damped_lya_profile_shortcut(wave_to_fit,resolution,lya_intrinsic_profile,total_tau_profile)
+
 
 def lnprob(theta, x, y, yerr, variables):
     order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h']
