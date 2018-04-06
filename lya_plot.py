@@ -92,13 +92,31 @@ def profile(wave_to_fit, flux_to_fit, error_to_fit, resolution,
                         theta_all.append(variables[p]['value'])
 
                 vs_n_i, am_n_i, fw_n_i, vs_b_i, am_b_i, fw_b_i, h1_col_i, h1_b_i, \
-                                h1_vel_i, d2h_i = theta_all
+                                h1_vel_i, d2h_i, vs_haw_i, am_haw_i, fw_haw_i = theta_all
 
                 singcomp = variables['am_b']['single_comp']
-                model_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_i,10**am_n_i,fw_n_i,
-                                                    vs_b_i,10**am_b_i,fw_b_i,h1_col_i,
-                                                    h1_b_i,h1_vel_i,d2h_i,resolution,
-                                                    single_component_flux=singcomp)/1e14
+                #model_fit = lyapy.damped_lya_profile(wave_to_fit,vs_n_i,10**am_n_i,fw_n_i,
+                #                                    vs_b_i,10**am_b_i,fw_b_i,h1_col_i,
+                #                                    h1_b_i,h1_vel_i,d2h_i,resolution,
+                #                                    single_component_flux=singcomp)/1e14
+                lya_intrinsic_profile_mcmc = lyapy.lya_intrinsic_profile_func(wave_to_fit,
+                                                   vs_n_i,10**am_n_i,fw_n_i,
+                                                   vs_b_i,10**am_b_i,fw_b_i,
+                                                   single_component_flux=singcomp)
+
+                if variables['vs_haw']['HAW']:
+                  haw_profile = lyapy.lya_intrinsic_profile_func(wave_to_fit,
+                                          variables['vs_haw']['best'][0],
+                                          10**variables['am_haw']['best'][0],
+                                          variables['fw_haw']['best'][0],
+                                          return_flux=False, single_component_flux=True)
+                  lya_intrinsic_profile_mcmc += haw_profile
+
+                total_attenuation = lyapy.total_tau_profile_func(wave_to_fit,
+                                           h1_col_i,h1_b_i,h1_vel_i,d2h_i)
+                model_fit = lyapy.damped_lya_profile_shortcut(wave_to_fit,resolution,
+                                        lya_intrinsic_profile_mcmc, total_attenuation)
+                  
                 model_fits[i,:] = model_fit
                 #plt.plot(wave_to_fit,model_fit,'deeppink',linewidth=1., alpha=0.1)
           low = np.zeros_like(wave_to_fit)

@@ -532,7 +532,7 @@ def lnprior(theta, minmax, prior_Gauss, prior_list):
     
     return priors
 
-def lnlike(theta, x, y, yerr, resolution, singcomp=False):
+def lnlike(theta, x, y, yerr, resolution, singcomp=False, HAW=False):
     vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
     #y_model = damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
     #                                   h1_b,h1_vel,d2h=d2h,resolution=resolution,
@@ -544,10 +544,7 @@ def lnlike(theta, x, y, yerr, resolution, singcomp=False):
 
     return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
 
-## add a new function that is very similar to damped_lya_profile_shortcut - or just
-## modify lnprob or whatever to intake damped_lya_profile_shortcut instead of damped_lya_profile.
-## Then create lya_intrinsic_profile from multiple calls to lya_intrinsic_profile_func
-#damped_lya_profile_shortcut(wave_to_fit,resolution,lya_intrinsic_profile,total_tau_profile)
+
 
 
 def lnprob(theta, x, y, yerr, variables):
@@ -579,5 +576,78 @@ def lnprob(theta, x, y, yerr, variables):
     #if np.random.uniform() > 0.9995: print "took a step!", theta_all
     ll = lnlike(theta_all, x, y, yerr, resolution = variables['d2h']['resolution'],
                                        singcomp = variables['am_b']['single_comp'])
+    return lp + ll
+
+
+
+def lnprior_g140l(theta, minmax, prior_Gauss, prior_list):
+    assert len(theta) == len(minmax)
+
+    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h, vs_haw, am_haw, fw_haw = theta
+    
+    priors = 0
+    for i in range(len(theta)):
+        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
+            return -np.inf
+        if prior_Gauss[i]: # Gaussian prior, else uniform prior (0 or np.log(h1_b))
+            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
+        elif (i == 7) and not prior_Gauss[7]: # h1_b
+            priors += np.log(h1_b)
+        else:
+            priors += 0 # not necessary, just included for clarity/completeness
+            
+    # ... no parameter was out of range
+    
+    return priors
+
+###
+
+def lnlike_g140l(theta, x, y, yerr, resolution, singcomp=False, HAW=False):
+    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h, vs_haw, am_haw, fw_haw = theta
+    #y_model = damped_lya_profile(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,h1_col,
+    #                                   h1_b,h1_vel,d2h=d2h,resolution=resolution,
+    #                                   single_component_flux=singcomp)/1e14
+    intr_profile = lya_intrinsic_profile_func(x,vs_n,10**am_n,fw_n,vs_b,10**am_b,fw_b,
+                   single_component_flux=singcomp)
+    if HAW: #Huge Ass Wings
+      haw_profile = lya_intrinsic_profile_func(x,vs_haw,10**am_haw,fw_haw,single_component_flux=True)
+      intr_profile += haw_profile
+    tau = total_tau_profile_func(x,h1_col,h1_b,h1_vel,d2h=d2h)
+    y_model = damped_lya_profile_shortcut(x,resolution,intr_profile,tau)/1e14
+
+    return -0.5 * np.sum(np.log(2 * np.pi * yerr**2) + (y - y_model) ** 2 / yerr**2)
+
+
+def lnprob_g140l(theta, x, y, yerr, variables):
+    order = ['vs_n', 'am_n', 'fw_n', 'vs_b', 'am_b', 'fw_b', 'h1_col', 'h1_b', 'h1_vel', 'd2h',
+             'vs_haw', 'am_haw', 'fw_haw']
+    theta_all = []
+    range_all = []
+    prior_Gauss = [] # Boolean list for whether or not the parameter has a Gaussian prior
+    prior_list = []
+    i = 0
+    for p in order:
+        range_all.append( [variables[p]['min'],variables[p]['max']] )
+        if variables[p]['vary']:
+            theta_all.append(theta[i])
+            i = i+1
+        else:
+            theta_all.append(variables[p]['value'])
+        if variables[p]['Gaussian prior']:
+            prior_Gauss.append(True)
+            prior_list.append([variables[p]['prior mean'],variables[p]['prior stddev']])
+        else:
+            prior_Gauss.append(False)
+            prior_list.append(0)
+                
+    assert (i) == len(theta)
+    lp = lnprior_g140l(theta_all, range_all, prior_Gauss, prior_list)
+    if not np.isfinite(lp):
+        return -np.inf
+
+    #if np.random.uniform() > 0.9995: print "took a step!", theta_all
+    ll = lnlike_g140l(theta_all, x, y, yerr, resolution = variables['d2h']['resolution'],
+                                       singcomp = variables['am_b']['single_comp'],
+                                       HAW = variables['vs_haw']['HAW'])
     return lp + ll
 
