@@ -42,7 +42,7 @@ perform_error = False # if True: does a long error estimation. Don't set to True
 #######################################
 
 ## Read in the data ##
-input_filename = '/Users/aayoungb/Data/HST/GO15190/Allison/HD-95735-E140M-odn905010_1.xl_stis'
+input_filename = 'HD-95735-E140M-odn905010_1.xl_stis'
 sav = readsav(input_filename)
 wave_to_fit = sav['wave']
 flux_to_fit = sav['flux']
@@ -110,7 +110,7 @@ geo_mod = (peak_geocorona * np.exp(-lz0_geocorona/2.0) )
 ## If you want to use one of the LSF's from STScI's website, currently you must download it locally
 ## as a text file and read it in here. Comment the next 5 lines out if not using this, and set 
 ## the resolution keyword to a float.
-lsf_filename = '/Users/aayoungb/Data/HST/FUMES/STIS_E140M_LSF.dat'
+lsf_filename = 'STIS_E140M_LSF.dat'
 lsf = np.loadtxt(lsf_filename,skiprows=2) # 0.2x0.2 E140M - confirmed from MAST
 lsf_wave = lsf[:,0]
 lsf_array = lsf[:,3]
