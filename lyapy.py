@@ -1,13 +1,9 @@
 import numpy as np
-#import pyspeckit ## only necessary if using MPFIT
 import astropy.io.fits as pyfits
 import matplotlib.pyplot as plt
 import astropy.table
 import voigt ## this is my voigt.py file
-import itertools ## only necessary for gridsearch
-import multiprocessing ## only necessary for gridsearch
 import scipy.stats
-import sys
 from astropy.modeling.models import Voigt1D, Lorentz1D, Gaussian1D
 
 pc_in_cm = 3e18
