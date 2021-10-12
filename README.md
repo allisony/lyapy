@@ -1,5 +1,4 @@
 # lyapy
-Code for determining the intrinsic Lyman-alpha flux of nearby low-mass
-stars and empirically determining their extreme-UV spectrum.
+Lyman alpha reconstruction code used in [Youngblood et al. 2016](https://ui.adsabs.harvard.edu/abs/2016ApJ...824..101Y/abstract) and [other papers](https://ui.adsabs.harvard.edu/public-libraries/o5i7z8i2QXWzZSBDV45wqQ).
 
-Run the script "LyA_fit_start.py" to test the MCMC on the "p_msl_pan_-----_gj176_panspec_native_resolution_waverange1100.0-1300.0_modAY.fits" spectrum (STIS G140M). Requirements include emcee, triangle, astropy, voigt (voigt.py), and matplotlib.
+Edit and run the script "example_start_file.py" to fit the model to the STIS E140M spectrum of GJ 411 "HD-95735-E140M-odn905010_1.xl_stis". Requirements include astropy, numpy, scipy, matplotlib, pandas, time, corner, emcee, joblib, and copy.
