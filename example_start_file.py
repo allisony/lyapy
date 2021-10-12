@@ -548,6 +548,7 @@ if perform_error:
 
     plt.figure()
     plt.hist(intrinsic_LyA_fluxes_to_histogram,bins=100)
+    plt.xlabel('Intrinsic Ly$\\alpha$ flux (erg cm$^{-2}$ s$^{-1}$)',fontsize=18)
 
 
     df = pd.read_csv(filename)
@@ -569,7 +570,7 @@ if perform_error:
     #est_errs = (df['lya_model_high_1sig'] - df['lya_model_low_1sig'])/2.
     #axx.errorbar(df['wave_lya'],df['flux_lya']-df['lya_model_median'],yerr=np.sqrt(df['error_lya']**2 + est_errs**2),fmt='ko')
 
-    axx.set_ylim([-8e-13,8e-13])
+    #axx.set_ylim([-8e-13,8e-13])
 
     axx.set_xlabel('Wavelength (\AA)',fontsize=18)
     ax.set_ylabel('Flux Density (erg cm$^{-2}$ s$^{-1}$ \AA$^{-1}$)',fontsize=18)
