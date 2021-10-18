@@ -4,7 +4,7 @@ import copy
 import emcee
 import time
 import joblib
-import lyapy
+from lyapy import lyapy
 from corner import corner
 
 plt.ion()

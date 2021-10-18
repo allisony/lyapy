@@ -2,7 +2,7 @@ import numpy as np
 import astropy.io.fits as pyfits
 import matplotlib.pyplot as plt
 import astropy.table
-import voigt ## this is my voigt.py file
+from lyapy import voigt ## this is my voigt.py file
 import scipy.stats
 from astropy.modeling.models import Voigt1D, Lorentz1D, Gaussian1D
 

@@ -1,9 +1,9 @@
 import numpy as np
-import lyapy
-from fitting import *
+from lyapy import lyapy
+from lyapy.fitting import *
 from scipy.io import readsav
 import time
-import lya_plot
+from lyapy import lya_plot
 from astropy.modeling.models import Voigt1D
 import matplotlib.pyplot as plt
 import pandas as pd
