@@ -62,7 +62,7 @@ def lnprior(theta, minmax, prior_Gauss, prior_list):
     return priors
 
 
-def lnlike(theta, x, y, yerr, resolution, variables, model_function, xerr=None):
+def lnlike(theta, x, y, yerr, resolution, variables, model_function, xerr=None,debug=True):
 
     y_model = model_function(x, resolution, theta, variables, lnlike=True)
 
@@ -80,6 +80,13 @@ def lnlike(theta, x, y, yerr, resolution, variables, model_function, xerr=None):
             lnlike += -0.5*(np.sum( (y[i] - y_model[i])**2/yerr[i]**2 + np.log(2*np.pi*yerr[i]**2) + log_xerr)) # not too sure about that minus sign
 
 
+    if debug:
+        plt.figure()
+        plt.plot(x,y,color='k')
+        plt.plot(x,y_model,color='deeppink')
+        print(lnlike)
+
+        
     return lnlike
 
 def lnprob(theta, x, y, yerr, resolution, variables, variables_order, model_function, xerr=None):
