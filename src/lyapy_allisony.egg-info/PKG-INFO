@@ -1,0 +1,23 @@
+Metadata-Version: 2.1
+Name: lyapy-allisony
+Version: 0.0.1
+Summary: Lyman alpha reconstructions
+Home-page: https://github.com/allisony/lyapy
+Author: Allison Youngblood
+Author-email: allison.a.youngblood@nasa.gov
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/allisony/lyapy/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# lyapy
+Lyman alpha reconstruction code used in [Youngblood et al. 2016](https://ui.adsabs.harvard.edu/abs/2016ApJ...824..101Y/abstract) and [other papers](https://ui.adsabs.harvard.edu/public-libraries/o5i7z8i2QXWzZSBDV45wqQ).
+
+Edit and run the script "example_start_file.py" to fit the model to the STIS E140M spectrum of GJ 411 "HD-95735-E140M-odn905010_1.xl_stis". Requirements include astropy, numpy, scipy, matplotlib, pandas, time, corner, emcee, joblib, and copy.
+
+

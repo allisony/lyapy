@@ -362,7 +362,9 @@ perform_variable_check(variables)
 #################    
 
 
-sampler, pos0 = setup_sampler(wave_to_fit, flux_to_fit, error_to_fit, resolution,  
+if not perform_error:
+
+    sampler, pos0 = setup_sampler(wave_to_fit, flux_to_fit, error_to_fit, resolution,  
                               nwalkers, variables, variables_order, my_model, start_uniform)
 
 
@@ -372,8 +374,10 @@ sampler, pos0 = setup_sampler(wave_to_fit, flux_to_fit, error_to_fit, resolution
 #                    #
 ######################
 
-
-sampler_chain = perform_mcmc(sampler, pos0, nsteps, nruns=nruns, fresh_start = fresh_start)
+if not perform_error:
+    sampler_chain = perform_mcmc(sampler, pos0, nsteps, nruns=nruns, fresh_start = fresh_start)
+else:
+    sampler_chain = get_sampler_chain()
 
 
 ndim = 0
@@ -393,10 +397,10 @@ best, variables = extract_best_fit_parameters(samples, variables, variables_orde
 #                                                                #
 ##################################################################
 
-
-print("Mean acceptance fraction: {0:.3f}"
-                .format(np.mean(sampler.acceptance_fraction)))
-print("should be between 0.25 and 0.5")
+if not perform_error:
+    print("Mean acceptance fraction: {0:.3f}"
+                    .format(np.mean(sampler.acceptance_fraction)))
+    print("should be between 0.25 and 0.5")
 
 
 make_convergence_plot(sampler_chain, ndim, burnin)
