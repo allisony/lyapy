@@ -190,7 +190,7 @@ def profile_plot(x, y, yerr, resolution, samples, model_function, variables, var
             parameters_best.append(variables[variable_name]['value'])
 
 
-    output = model_function(x, resolution, parameters_best, variables, lnlike=False)
+    output = model_function(x, resolution, parameters_best, variables, lnlike=False, convolve=convolve)
     assert isinstance(output, list), "%r is not a list" % output
 
     array_length = int(len(samples)/thin_out)
@@ -246,7 +246,7 @@ def profile_plot(x, y, yerr, resolution, samples, model_function, variables, var
                         theta_all.append(variables[variable_name]['value'])
 
                     
-                output = model_function(x, resolution, theta_all, variables, lnlike=False)
+                output = model_function(x, resolution, theta_all, variables, lnlike=False, convolve=convolve)
 
                     
 
