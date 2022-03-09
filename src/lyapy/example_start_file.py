@@ -199,6 +199,16 @@ def my_model(x, resolution, parameters, variables, lnlike=True, convolve=True):
 
         y_reversal_list = [np.convolve(rev_profile, resolution_lya, mode='same')]
 
+    elif convolve == 'both':
+        y_model_list = [y_model_lya_convolved, y_model_lya]
+        
+        y_intrinsic_list = [lya_intrinsic_profile_convolved, lya_intrinsic_profile]
+
+        y_ISM_attenuation_list = [np.convolve(total_attenuation*total_attenuation2, resolution_lya, mode='same'), total_attenuation*total_attenuation2]
+
+        y_reversal_list = [np.convolve(rev_profile, resolution_lya, mode='same'), rev_profile]
+
+
     else:
         y_model_list = [y_model_lya]
 
@@ -426,7 +436,7 @@ else:
 
 
 
-line_percentiles_to_store_dic, reconstructed_fluxes_dic = profile_plot(wave_to_fit, flux_to_fit, error_to_fit, resolution, samples, my_model, variables, variables_order, perform_error=perform_error, thin_out=10, convolve=True) # thin_out is a parameter that makes this run faster (only makes a difference if perform_error = True)
+line_percentiles_to_store_dic, reconstructed_fluxes_dic = profile_plot(wave_to_fit, flux_to_fit, error_to_fit, resolution, samples, my_model, variables, variables_order, perform_error=perform_error, thin_out=10, convolve='both') # thin_out is a parameter that makes this run faster (only makes a difference if perform_error = True)
 
 
 
@@ -445,7 +455,8 @@ if perform_error:
 
 
     line_names = ['lya']
-    array_per_line_names = ['model', 'intrinsic', 'ism', 'reversal']
+    array_per_line_names = ['model', 'model unconvolved', 'intrinsic', 'intrinsic unconvolved', 'ism', 'ism unconvolved', 
+                                      'reversal', 'reversal unconvolved']
     percentile_names = ['low_2sig','low_1sig','median','high_1sig','high_2sig']
     data_names = ['wave', 'flux', 'error']
     data = [wave_to_fit, flux_to_fit, error_to_fit]
