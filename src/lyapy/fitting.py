@@ -62,7 +62,12 @@ def lnprior(theta, minmax, prior_Gauss, prior_list):
     return priors
 
 
-def lnlike(theta, x, y, yerr, resolution, variables, model_function, xerr=None,debug=False):
+def lnlike(theta, x, y, yerr, resolution, variables, model_function, mask_data, xerr=None,debug=False):
+
+    x = np.ma.array(x, mask=mask_data)
+    y = np.ma.array(y, mask=mask_data)
+    yerr = np.ma.array(yerr, mask=mask_data)
+
 
     y_model = model_function(x, resolution, theta, variables, lnlike=True)
 
@@ -89,7 +94,7 @@ def lnlike(theta, x, y, yerr, resolution, variables, model_function, xerr=None,d
         
     return lnlike
 
-def lnprob(theta, x, y, yerr, resolution, variables, variables_order, model_function, xerr=None, debug=False):
+def lnprob(theta, x, y, yerr, resolution, variables, variables_order, model_function, mask_data, xerr=None, debug=False):
 
     theta_all = []
     range_all = []
@@ -131,7 +136,7 @@ def lnprob(theta, x, y, yerr, resolution, variables, variables_order, model_func
 
         return -np.inf
 
-    ll = lnlike(theta_all, x, y, yerr, resolution, variables, model_function, xerr, debug)
+    ll = lnlike(theta_all, x, y, yerr, resolution, variables, model_function, mask_data, xerr, debug)
     
     return lp + ll
 
@@ -353,7 +358,7 @@ def profile_plot(x, y, yerr, resolution, samples, model_function, variables, var
 
 
 
-def setup_sampler(x, y, yerr, resolution, nwalkers, variables, variables_order, my_model, start_uniform=True, xerr=None,debug=False):
+def setup_sampler(x, y, yerr, resolution, nwalkers, variables, variables_order, my_model, mask_data, start_uniform=True, xerr=None,debug=False):
 
     varyparams = [] # list of parameters that are being varied this run
     theta, scale, mins, maxs = [], [], [], [] # to be filled with parameter values
@@ -381,7 +386,7 @@ def setup_sampler(x, y, yerr, resolution, nwalkers, variables, variables_order, 
         pos0 = [theta + scale*np.random.randn(ndim) for i in range (nwalkers)]
 
     sampler = emcee.EnsembleSampler(nwalkers, number_free_parameters, lnprob, 
-            args=(x,y,yerr, resolution, variables, variables_order, my_model, xerr,debug))
+            args=(x,y,yerr, resolution, variables, variables_order, my_model, mask_data, xerr,debug))
 
     return sampler, pos0
 

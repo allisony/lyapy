@@ -33,7 +33,7 @@ nruns = 1 # how many runs do you want to do? Keep at 1 until you know what you'r
 
 fresh_start = True # if True: starts the fit from scratch. if False: picks up where the fit left off.
 perform_error = False # if True: does a long error estimation. Don't set to True until your fit has converged and you're satisfied with it.
-
+mask_data = False # if True: allows the user to mask out part(s) of their data from being evaluated by the log probability function (e.g., airglow)
 
 #######################################
 #                                     #
@@ -99,6 +99,13 @@ geo_mod = (peak_geocorona * np.exp(-lz0_geocorona/2.0) )
 #flux_to_fit = flux_to_fit - geo_mod
 
 #plt.plot(wave_to_fit, geo_mod)
+
+
+if mask_data:
+    mask = (wave_to_fit >= 1215.6081) & (wave_to_fit <=1215.7470) # example wavelength to mask
+
+else:
+    mask = np.isreal(wave_to_fit) # otherwise all elements of wave_to_fit evaluated by fit
 
 
 #### Define the resolution
@@ -375,7 +382,7 @@ perform_variable_check(variables)
 if not perform_error:
 
     sampler, pos0 = setup_sampler(wave_to_fit, flux_to_fit, error_to_fit, resolution,  
-                              nwalkers, variables, variables_order, my_model, start_uniform)
+                              nwalkers, variables, variables_order, my_model, mask, start_uniform)
 
 
 ######################
@@ -458,8 +465,8 @@ if perform_error:
     array_per_line_names = ['model', 'model unconvolved', 'intrinsic', 'intrinsic unconvolved', 'ism', 'ism unconvolved', 
                                       'reversal', 'reversal unconvolved']
     percentile_names = ['low_2sig','low_1sig','median','high_1sig','high_2sig']
-    data_names = ['wave', 'flux', 'error']
-    data = [wave_to_fit, flux_to_fit, error_to_fit]
+    data_names = ['wave', 'flux', 'error','data_mask']
+    data = [wave_to_fit, flux_to_fit, error_to_fit, mask]
 
 
     for i in range(len(line_names)):
