@@ -74,7 +74,7 @@ def profile(wave_to_fit, flux_to_fit, error_to_fit, resolution,
 
 
       f = plt.figure(figsize=(8,9))
-      plt.rc('text', usetex=True)
+      #plt.rc('text', usetex=True)
       plt.rc('font', family='sans-serif', size=14)
       gs = gridspec.GridSpec(3, 1, height_ratios=[3, 3, 1]) 
       ax = plt.subplot(gs[0])
@@ -542,7 +542,7 @@ def profile_cii(wave_to_fit, flux_to_fit, error_to_fit, resolution,
 
 
       f = plt.figure(figsize=(8,9))
-      plt.rc('text', usetex=True)
+      #plt.rc('text', usetex=True)
       plt.rc('font', family='sans-serif', size=14)
       gs = gridspec.GridSpec(3, 1, height_ratios=[3, 3, 1]) 
       ax = plt.subplot(gs[0])
@@ -744,7 +744,7 @@ def profile_rev(wave_to_fit, flux_to_fit, error_to_fit, resolution,
 
 
       f = plt.figure(figsize=(8,9))
-      plt.rc('text', usetex=True)
+      #plt.rc('text', usetex=True)
       plt.rc('font', family='sans-serif', size=14)
       gs = gridspec.GridSpec(3, 1, height_ratios=[3, 3, 1]) 
       ax = plt.subplot(gs[0])

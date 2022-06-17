@@ -206,14 +206,6 @@ def my_model(x, resolution, parameters, variables, lnlike=True, convolve=True):
 
         y_reversal_list = [np.convolve(rev_profile, resolution_lya, mode='same')]
 
-    elif convolve == 'both':
-        y_model_list = [y_model_lya_convolved, y_model_lya]
-        
-        y_intrinsic_list = [lya_intrinsic_profile_convolved, lya_intrinsic_profile]
-
-        y_ISM_attenuation_list = [np.convolve(total_attenuation*total_attenuation2, resolution_lya, mode='same'), total_attenuation*total_attenuation2]
-
-        y_reversal_list = [np.convolve(rev_profile, resolution_lya, mode='same'), rev_profile]
 
 
     else:
@@ -233,8 +225,12 @@ def my_model(x, resolution, parameters, variables, lnlike=True, convolve=True):
 
         return y_model_list 
 
-    else:
 
+    elif convolve == 'both':
+        return [[y_model_lya_convolved],[y_model_lya],[lya_intrinsic_profile_convolved],[lya_intrinsic_profile],
+                    [np.convolve(total_attenuation*total_attenuation2, resolution_lya, mode='same')],[total_attenuation*total_attenuation2],
+                    [np.convolve(rev_profile, resolution_lya, mode='same')], [rev_profile]]
+    else:
         return [y_model_list, y_intrinsic_list, y_ISM_attenuation_list, y_reversal_list] # must be a list
 
 
@@ -480,6 +476,7 @@ if perform_error:
             for k in range(len(percentile_names)):
 
                 percentile_name = percentile_names[k]
+
 
                 df_line[line_name + "_" + array_name + "_" + percentile_name] = \
                                                         line_percentiles_to_store_dic["Line{0}".format(i)][j,:,k]

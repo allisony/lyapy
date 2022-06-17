@@ -20,7 +20,7 @@ me=mp/1836.             # electron mass in grams
 
 from matplotlib import rc
 #rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-rc('text', usetex=True)
+#rc('text', usetex=True)
 
 
 def geocoronal_subtraction(input_filename,resolution,starname,sub_geo=False):
@@ -170,8 +170,10 @@ def EUV_spectrum(total_Lya_flux,distance_to_target,starname,
       ax = f.add_subplot(111)
       ax.plot(EUV_wavelength_array,EUV_flux_array,'Navy',linewidth=1.5)
       ax.set_yscale('log')
-      ax.set_ylabel(r'Flux ' r'(erg s$^{-1}$ cm$^{-2}$ \AA$^{-1}$)',fontsize=14)
-      ax.set_xlabel(r'Wavelength (\AA)',fontsize=14)
+      #ax.set_ylabel(r'Flux ' r'(erg s$^{-1}$ cm$^{-2}$ \AA$^{-1}$)',fontsize=14)
+      #ax.set_xlabel(r'Wavelength (\AA)',fontsize=14)
+      ax.set_ylabel('Flux (erg/cm2/s/A)',fontsize=14)
+      ax.set_xlabel('Wavelength (A)',fontsize=14)
       ax.set_xlim([100,1170])
       #ax.set_title(starname + ' EUV spectrum',fontsize=16)
       #ax.text(0.97,0.97,r'Ly$\alpha$ flux = '+"{:.2E}".format(total_Lya_flux),

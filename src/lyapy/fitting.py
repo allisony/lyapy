@@ -9,7 +9,7 @@ from corner import corner
 
 plt.ion()
 
-plt.rc('text', usetex=True)
+#plt.rc('text', usetex=True)
 plt.rc('font', family='sans-serif', size=14)
 
 
