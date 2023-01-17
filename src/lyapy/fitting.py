@@ -66,7 +66,8 @@ def lnlike(theta, x, y, yerr, resolution, variables, model_function, mask_data, 
 
     x = np.ma.array(x, mask=mask_data)
     y = np.ma.array(y, mask=mask_data)
-    yerr = np.ma.array(yerr, mask=mask_data)
+    if yerr != None:
+        yerr = np.ma.array(yerr, mask=mask_data)
 
 
     y_model = model_function(x, resolution, theta, variables, lnlike=True)
@@ -82,7 +83,7 @@ def lnlike(theta, x, y, yerr, resolution, variables, model_function, mask_data, 
 
         else:
 
-            lnlike += -0.5*(np.sum( (y[i] - y_model[i])**2/yerr[i]**2 + np.log(2*np.pi*yerr[i]**2) + log_xerr)) # not too sure about that minus sign
+            lnlike += -0.5*(np.sum( (y[i] - y_model[i])**2/yerr[i]**2 + np.log(2*np.pi*yerr[i]**2) + log_xerr)) 
 
 
     if debug:
