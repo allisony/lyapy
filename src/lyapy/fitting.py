@@ -78,7 +78,7 @@ def lnlike(theta, x, y, yerr, resolution, variables, model_function, mask_data, 
 
         if yerr is None:
 
-            lnlike += -(np.sum( (y[i] - y_model[i])**2 ))
+            lnlike += -(np.sum( (y[i] - y_model[i])**2 )) / len(x[i])
 
         else:
 
