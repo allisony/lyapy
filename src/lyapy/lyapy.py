@@ -6,13 +6,13 @@ from lyapy import voigt ## this is my voigt.py file
 import scipy.stats
 from astropy.modeling.models import Voigt1D, Lorentz1D, Gaussian1D
 
-pc_in_cm = 3e18
-au_in_cm = 1.5e13
+pc_in_cm = 3.08567758e18
+au_in_cm = 1.49597871e13
 lya_rest = 1215.67
-c_km = 2.998e5
+c_km = 2.99792458e5
 
 lya_rest = 1215.67
-ccgs = 3e10
+ccgs = 2.99792458e10
 e=4.8032e-10            # electron charge in esu
 mp=1.6726231e-24        # proton mass in grams
 me=mp/1836.             # electron mass in grams
