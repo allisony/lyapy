@@ -358,7 +358,7 @@ def profile_plot(x, y, yerr, resolution, samples, model_function, variables, var
 
 
 
-def setup_sampler(x, y, yerr, resolution, nwalkers, variables, variables_order, my_model, mask_data, start_uniform=True, xerr=None,debug=False):
+def setup_sampler(x, y, yerr, resolution, nwalkers, variables, variables_order, my_model, mask_data, start_uniform=True, xerr=None,debug=False, lnprob=lnprob):
 
     varyparams = [] # list of parameters that are being varied this run
     theta, scale, mins, maxs = [], [], [], [] # to be filled with parameter values
