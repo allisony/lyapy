@@ -136,7 +136,8 @@ def lnprob(theta, x, y, yerr, resolution, variables, variables_order, model_func
 
         return -np.inf
 
-    ll = lnlike_asymm(theta_all, x, y, yerr, resolution, variables, model_function, mask_data, xerr, debug)
+    #ll = lnlike_asymm(theta_all, x, y, yerr, resolution, variables, model_function, mask_data, xerr, debug)
+    ll = lnlike(theta_all, x, y, yerr, resolution, variables, model_function, mask_data, xerr, debug)
     
     return lp + ll
 
