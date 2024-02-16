@@ -378,7 +378,7 @@ perform_variable_check(variables)
 if not perform_error:
 
     sampler, pos0 = setup_sampler(wave_to_fit, flux_to_fit, error_to_fit, resolution,  
-                              nwalkers, variables, variables_order, my_model, mask, start_uniform)
+                              nwalkers, variables, variables_order, my_model, None, start_uniform)
 
 
 ######################
