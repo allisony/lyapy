@@ -289,7 +289,7 @@ def profile_plot(x, y, yerr, resolution, samples, model_function, variables, var
 
                 for sample_index in range(array_length):
 
-                    reconstructed_fluxes_dic[line_key_name][sample_index, array_number] = np.trapz( \
+                    reconstructed_fluxes_dic[line_key_name][sample_index, array_number] = np.trapezoid( \
                             line_arrays_to_store_dic[line_key_name][sample_index, :, array_number], \
                             x[line_number])
 
@@ -555,7 +555,7 @@ def make_corner_plot(samples, best, variables, variable_order, ndim):
 
     fig, axes = plt.subplots(ndim, ndim, figsize=(12.5,9))
     corner(samples, bins=40, labels=variable_names,
-                      max_n_ticks=3,plot_contours=True,quantiles=[0.025,0.975],fig=fig,
+                      max_n_ticks=3,plot_contours=True,quantiles=[0.025,0.5,0.975],fig=fig,
                       show_titles=True,verbose=True,truths=best[:,2],range=np.ones(ndim)*1.0) # fix this
     fig.subplots_adjust(bottom=0.1,left=0.1,top=0.8)
 
