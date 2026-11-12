@@ -5,6 +5,18 @@ import astropy.table
 from lyapy import voigt ## this is my voigt.py file
 import scipy.stats
 from astropy.modeling.models import Voigt1D, Lorentz1D, Gaussian1D
+from lyapy.absorption import (
+    tau_profile as _tau_profile,
+    total_tau_profile_func as _total_tau_profile_func,
+)
+from lyapy.instrument import (
+    make_kernel as _make_kernel,
+    ready_stis_lsf as _ready_stis_lsf,
+)
+from lyapy.profiles import (
+    gaussian_flux as _gaussian_flux,
+    lya_intrinsic_profile_func as _lya_intrinsic_profile_func,
+)
 
 pc_in_cm = 3.08567758e18
 au_in_cm = 1.49597871e13
@@ -208,103 +220,39 @@ def EUV_spectrum(total_Lya_flux,distance_to_target,starname,
 
 
 def gaussian_flux(amplitude,sigma):
-
-    """ Computes the flux of a Gaussian given the amplitude and sigma. """
-
-    flux = np.sqrt(2*np.pi) * sigma * amplitude
-
-    return flux
+    """Compatibility wrapper for :func:`lyapy.profiles.gaussian_flux`."""
+    return _gaussian_flux(amplitude, sigma)
 
 def lya_intrinsic_profile_func(x,vs_n,am_n,fw_n,vs_b=2.,am_b=2.,fw_b=2.,
                                return_flux=False,single_component_flux=False,
                                return_individual_components=False, line_center = 1215.67):
-
-    """
-    Given a wavelength array and parameters (velocity centroid, amplitude, and FWHM)
-    of 2 Gaussians, computes the resulting intrinsic Lyman-alpha profile, and 
-    optionally returns the flux.  Can also choose only 1 Gaussian emission component.
-
-    """
-
-    ## Narrow Ly-alpha ##
-
-    lam_o_n = line_center * (1 + (vs_n/c_km))
-    sig_n = line_center * (fw_n/c_km) / 2.3548
-
-    lz0_n = ( (x - lam_o_n) / sig_n )**2
-    lya_profile_narrow = ( am_n * np.exp(-lz0_n/2.0) )
-
-    ## Broad Ly-alpha ##
-
-    lam_o_b = line_center * (1 + (vs_b/c_km))
-    sig_b = line_center * (fw_b/c_km) / 2.3548
-
-    lz0_b = ( (x - lam_o_b) / sig_b )**2
-    lya_profile_broad = ( am_b * np.exp(-lz0_b/2.0) )
-
-    ## Calculating intrinsic Lyman alpha flux
-    lya_flux_narrow = gaussian_flux(am_n,sig_n)
-    lya_flux_broad = gaussian_flux(am_b,sig_b)
-    
-    if return_flux:
-      if not single_component_flux:
-          if return_individual_components:
-            return lya_profile_narrow,lya_profile_broad,lya_flux_narrow+lya_flux_broad
-          else:
-            return lya_profile_narrow+lya_profile_broad,lya_flux_narrow+lya_flux_broad
-      else:
-          return lya_profile_narrow,lya_flux_narrow
-    else:
-      if not single_component_flux:
-        if return_individual_components:
-          return lya_profile_narrow,lya_profile_broad
-        else:
-          return lya_profile_narrow+lya_profile_broad
-      else:
-        return lya_profile_narrow
+    """Compatibility wrapper for :mod:`lyapy.profiles`."""
+    return _lya_intrinsic_profile_func(
+        x,
+        vs_n,
+        am_n,
+        fw_n,
+        vs_b,
+        am_b,
+        fw_b,
+        return_flux=return_flux,
+        single_component_flux=single_component_flux,
+        return_individual_components=return_individual_components,
+        line_center=line_center,
+    )
 
 
 def total_tau_profile_func(wave_to_fit,h1_col,h1_b,h1_vel,d2h=1.5e-5,which_line='h1_d1',wave_cut_off=2.0):
-
-    """
-    Given a wavelength array and parameters (H column density, b value, and 
-    velocity centroid), computes the Voigt profile of HI and DI Lyman-alpha
-    and returns the combined absorption profile.
-
-    """
-
-    ##### ISM absorbers #####
-
-    if which_line == 'h1_d1':
-
-        ## HI ##
-   
-        hwave_all,htau_all=tau_profile(h1_col,h1_vel,h1_b,'h1',wave_cut_off=wave_cut_off)
-        tauh1=np.interp(wave_to_fit,hwave_all,htau_all)
-
-        ## DI ##
-
-        d1_col = np.log10( (10.**h1_col)*d2h )
-
-        dwave_all,dtau_all=tau_profile(d1_col,h1_vel,h1_b/np.sqrt(2.),'d1',wave_cut_off=wave_cut_off)
-        taud1=np.interp(wave_to_fit,dwave_all,dtau_all)
-
-
-        ## Adding the optical depths and creating the observed profile ##
-
-        tot_tau = tauh1 + taud1
-        tot_ism = np.exp(-tot_tau)
-
-    else:
-
-        hwave_all,htau_all=tau_profile(h1_col,h1_vel,h1_b,which_line,wave_cut_off=wave_cut_off)
-        tau=np.interp(wave_to_fit,hwave_all,htau_all)
-
-        tot_ism = np.exp(-tau)
-
-
-
-    return tot_ism
+    """Compatibility wrapper for :mod:`lyapy.absorption`."""
+    return _total_tau_profile_func(
+        wave_to_fit,
+        h1_col,
+        h1_b,
+        h1_vel,
+        d2h=d2h,
+        which_line=which_line,
+        wave_cut_off=wave_cut_off,
+    )
 
 def damped_lya_profile(wave_to_fit,vs_n,am_n,fw_n,vs_b,am_b,fw_b,h1_col,h1_b,
                        h1_vel,d2h,resolution,single_component_flux=False,
@@ -358,100 +306,18 @@ def damped_lya_profile_shortcut(wave_to_fit,resolution,lya_intrinsic_profile,tot
     return lyman_fit*1e14
 
 def make_kernel(grid,fwhm,nfwhm=4.):
-
-    """
-    Creates a Gaussian kernel used for convolution to a certain resolution (resolving power).
-
-    grid is the wavelength array of your data (not your model)
-
-    fwhm = lya_rest/resolution where resolution is resolving power
-
-    nfwhm helps controls the length of the kernel - default is 4
-    and probably shouldn't be changed unless you have a good reason.
-    """
-
-    ngrd    = len(grid)
-    spacing = (grid[ngrd-1]-grid[0])/(ngrd-1.)
-    nkpts   = round(nfwhm*fwhm/spacing)
-
-    if (nkpts % 2) != 0:
-      nkpts += 1
-
-    kernel = spacing* (np.arange(nkpts)-(nkpts/2.))
-    kernel = np.exp(-np.log(2.0)/(fwhm/2.0)**2*(kernel)**2)  ## Gaussian kernel
-    kernel_norm = kernel/np.sum(kernel)  ## Normalize
-    kernel_norm=np.append(kernel_norm,kernel_norm[0])  ## Make sure it's symmetric
-
-    return kernel_norm
+    """Compatibility wrapper for :func:`lyapy.instrument.gaussian_kernel`."""
+    return _make_kernel(grid, fwhm, nfwhm=nfwhm)
 
 def tau_profile(ncols,vshifts,vdop,which_line,wave_cut_off=2.0):
-
-    """ 
-    Computes a Lyman-alpha Voigt profile for HI or DI given column density,
-    velocity centroid, and b parameter.
-
-    """
-
-    ## defining rest wavelength, oscillator strength, and damping parameter
-    if which_line == 'h1':
-        lam0s,fs,gammas=1215.67,0.4161,6.26e8
-    elif which_line == 'd1':
-        lam0s,fs,gammas=1215.3394,0.4161,6.27e8
-    elif which_line == 'mg2_h':
-        lam0s,fs,gammas=2796.3543,6.155E-01,2.625E+08
-    elif which_line == 'mg2_k':
-        lam0s,fs,gammas=2803.5315,3.058E-01,2.595E+08
-    else:
-        raise ValueError("which_line can only equal 'h1' or 'd1'!")
-
-    Ntot=10.**ncols  # column density of H I gas
-    nlam=4000       # number of elements in the wavelength grid
-    xsections_onesided=np.zeros(nlam)  # absorption cross sections as a 
-                                       # fun<D-O>ction of wavelength (one side of transition)
-    u_parameter=np.zeros(nlam)  # Voigt "u" parameter
-    nu0s=ccgs/(lam0s*1e-8)  # wavelengths of Lyman alpha in frequency
-    nuds=nu0s*vdop/c_km    # delta nus based off vdop parameter
-    a_parameter = np.abs(gammas/(4.*np.pi*nuds) ) # Voigt "a" parameter -- damping parameter
-    xsections_nearlinecenter = np.sqrt(np.pi)*(e**2)*fs*lam0s/(me*ccgs*vdop*1e13)  # cross-sections 
-                                                                           # near Lyman line center
-
-    
-    wave_edge=lam0s - wave_cut_off # define wavelength cut off - this is important for the brightest lines and should be increased appropriately.
-    wave_symmetrical=np.zeros(2*nlam-1) # huge wavelength array centered around a Lyman transition
-    wave_onesided = np.zeros(nlam)  # similar to wave_symmetrical, but not centered 
-                                    # around a Lyman transition 
-    lamshifts=lam0s*vshifts/c_km  # wavelength shifts from vshifts parameter
-
-    ## find end point for wave_symmetrical array and create wave_symmetrical array
-    num_elements = 2*nlam - 1
-    first_point = wave_edge
- 
-    mid_point = lam0s
-    end_point = 2*(mid_point - first_point) + first_point
-    wave_symmetrical = np.linspace(first_point,end_point,num=num_elements)
-    wave_onesided = np.linspace(lam0s,wave_edge,num=nlam)
-
-    freq_onesided = ccgs / (wave_onesided*1e-8)  ## convert "wave_onesided" array to a frequency array
-
-    u_parameter = (freq_onesided-nu0s)/nuds  ## Voigt "u" parameter -- dimensionless frequency offset
-
-    xsections_onesided=xsections_nearlinecenter*voigt.voigt(a_parameter,u_parameter)  ## cross-sections
-                                                                                # single sided
-                                                                                ## can't do symmetrical 
-
-    xsections_onesided_flipped = xsections_onesided[::-1]
-    
-    		
-    ## making the cross-sections symmetrical
-    xsections_symmetrical=np.append(xsections_onesided_flipped[0:nlam-1],xsections_onesided) 
-    deltalam=np.max(wave_symmetrical)-np.min(wave_symmetrical)
-    dellam=wave_symmetrical[1]-wave_symmetrical[0] 
-    nall=np.round(deltalam/dellam)
-    wave_all=deltalam*(np.arange(nall)/(nall-1))+wave_symmetrical[0]
-
-    tau_all = np.interp(wave_all,wave_symmetrical+lamshifts,xsections_symmetrical*Ntot)
-
-    return wave_all,tau_all
+    """Compatibility wrapper for :func:`lyapy.absorption.tau_profile`."""
+    return _tau_profile(
+        ncols,
+        vshifts,
+        vdop,
+        which_line,
+        wave_cut_off=wave_cut_off,
+    )
 
 
 def mask_spectrum(flux_to_fit,interactive=True,mask_lower_limit=None,mask_upper_limit=None):
@@ -490,31 +356,13 @@ def mask_spectrum(flux_to_fit,interactive=True,mask_lower_limit=None,mask_upper_
 
 
 def ready_stis_lsf(orig_lsf_wave,orig_lsf,stis_grating_disp,data_wave):
-
-
-  data_wave_spacing = data_wave[1]-data_wave[0]
-  data_wave_length = len(data_wave)
-
-  # define a new LSF wavelength array (lsf_lam) to interpolate orig_lsf onto. lsf_lam has the same wavelength spacing as the data array
-  # 
-  lsf_lam_min = np.round(np.min(orig_lsf_wave*stis_grating_disp)/data_wave_spacing) * data_wave_spacing # minimum wavelength for lsf_lam
-  lsf_lam_onesided = np.arange(lsf_lam_min,0,data_wave_spacing)  
-  if len(lsf_lam_onesided) % 2 != 0: ### Make sure it's even and doesn't include zero
-    lsf_lam_onesided = lsf_lam_onesided[1::] # get rid of the first element of the array if lsf_lam_onesided is odd
-
-  lsf_lam_flipped = -1*lsf_lam_onesided[::-1] # flip it to make it symmetrical
-  lsf_lam_pluszero=np.append(lsf_lam_onesided,np.array([0])) # add zero
-  lsf_lam=np.append(lsf_lam_pluszero,lsf_lam_flipped) # add the flipped array - lsf_lam should be odd
-
-  lsf_interp = np.interp(lsf_lam,orig_lsf_wave*stis_grating_disp,orig_lsf/np.sum(orig_lsf))
-  lsf_interp_norm = lsf_interp/np.sum(lsf_interp)#np.trapz(lsf_interp,lsf_lam) 
-
-  if data_wave_length < len(lsf_interp_norm):
-      lsf_interp_norm = np.delete(lsf_interp_norm,np.where(lsf_interp_norm == 0))
-      lsf_interp_norm = np.insert(lsf_interp_norm,0,0)
-      lsf_interp_norm = np.append(lsf_interp_norm,0)
-
-  return lsf_interp_norm
+  """Compatibility wrapper for :func:`lyapy.instrument.interpolate_stis_lsf`."""
+  return _ready_stis_lsf(
+      orig_lsf_wave,
+      orig_lsf,
+      stis_grating_disp,
+      data_wave,
+  )
 
 ## Define priors and likelihoods, where parameters are fixed
 def lnprior(theta, minmax, prior_Gauss, prior_list):

@@ -1,6 +1,7 @@
 import numpy as np
 
 from lyapy import fitting
+from lyapy.likelihoods import gaussian_log_likelihood
 
 
 def constant_model(x, resolution, parameters, variables, lnlike=True):
@@ -31,6 +32,16 @@ def test_gaussian_log_likelihood_matches_direct_calculation():
     )
 
     np.testing.assert_allclose(actual, expected, rtol=1e-14)
+    np.testing.assert_allclose(
+        gaussian_log_likelihood(y[0], np.full_like(y[0], theta[0]), yerr[0]),
+        expected,
+        rtol=1e-14,
+    )
+
+
+def test_gaussian_log_likelihood_validates_errors():
+    with np.testing.assert_raises_regex(ValueError, "positive"):
+        gaussian_log_likelihood([1.0], [1.0], [0.0])
 
 
 def test_prior_rejects_values_outside_bounds():
