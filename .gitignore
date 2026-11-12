@@ -2,6 +2,7 @@
 *.txt
 !requirements*.txt
 *.pyc
+*.swp
 .DS_Store
 __pycache__/
 .pytest_cache/

@@ -4,7 +4,7 @@ from lyapy.fitting import *
 from scipy.io import readsav
 import time
 from lyapy import lya_plot
-from astropy.modeling.models import Voigt1D
+from lyapy.models import legacy_voigt_model
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import gridspec
@@ -149,89 +149,14 @@ resolution = [lsf_list]
 
 
 def my_model(x, resolution, parameters, variables, lnlike=True, convolve=True): 
-
-    vs, am, fw_L, fw_G,  \
-    h1_col, h1_b, h1_vel, h1_col2, h1_b2, h1_vel2, d2h, p = parameters
-
-    wave_lya = x[0]
-
-    kernel_for_convolution = lyapy.ready_stis_lsf(resolution[0][0],resolution[0][1],wave_lya[1]-wave_lya[0],wave_lya)
-    resolution_lya = kernel_for_convolution.copy()
-
-    
-
-
-
-    if variables['h1_vel']['offset'] == True:
-        h1_vel = h1_vel + vs_n
-
-
-
-    line_center = vs/3e5*1215.67+1215.67
-    sigma_G = fw_G/3e5 * 1215.67 
-    sigma_L = fw_L/3e5 * 1215.67 
-                                           
-
-    voigt_profile_func = Voigt1D(x_0 = line_center, amplitude_L = 10**am, 
-                                                fwhm_L = sigma_L, fwhm_G = sigma_G)
-
-
-
-                       
-
-
-
-    rev_profile = np.exp(-p * voigt_profile_func(wave_lya) / np.max(voigt_profile_func(wave_lya)))
-
-    lya_intrinsic_profile = voigt_profile_func(wave_lya) * rev_profile 
-
-
-    total_attenuation = lyapy.total_tau_profile_func(wave_lya,
-                                               h1_col,h1_b,h1_vel,d2h)
-    total_attenuation2 = lyapy.total_tau_profile_func(wave_lya,
-                                           h1_col2,h1_b2,h1_vel2,d2h)
-
-    y_model_lya = lya_intrinsic_profile * total_attenuation * total_attenuation2
-    y_model_lya_convolved = np.convolve(y_model_lya, resolution_lya, mode='same')
-
-    lya_intrinsic_profile_convolved = np.convolve(lya_intrinsic_profile, resolution_lya, mode='same')
-
-
-    if convolve:
-        y_model_list = [y_model_lya_convolved]
-
-        y_intrinsic_list = [lya_intrinsic_profile_convolved]
-
-        y_ISM_attenuation_list = [np.convolve(total_attenuation*total_attenuation2, resolution_lya, mode='same')]
-
-        y_reversal_list = [np.convolve(rev_profile, resolution_lya, mode='same')]
-
-
-
-    else:
-        y_model_list = [y_model_lya]
-
-        y_intrinsic_list = [lya_intrinsic_profile]
-
-        y_ISM_attenuation_list = [total_attenuation*total_attenuation2]
-
-        y_reversal_list = [rev_profile]
-
-
-    if lnlike:
-
-        if not convolve:
-            raise ValueError('convolve=False when it should =True')
-
-        return y_model_list 
-
-
-    elif convolve == 'both':
-        return [[y_model_lya_convolved],[y_model_lya],[lya_intrinsic_profile_convolved],[lya_intrinsic_profile],
-                    [np.convolve(total_attenuation*total_attenuation2, resolution_lya, mode='same')],[total_attenuation*total_attenuation2],
-                    [np.convolve(rev_profile, resolution_lya, mode='same')], [rev_profile]]
-    else:
-        return [y_model_list, y_intrinsic_list, y_ISM_attenuation_list, y_reversal_list] # must be a list
+    return legacy_voigt_model(
+        x,
+        resolution,
+        parameters,
+        variables,
+        lnlike=lnlike,
+        convolve=convolve,
+    )
 
 
 

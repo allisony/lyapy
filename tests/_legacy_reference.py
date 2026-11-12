@@ -8,10 +8,10 @@ new public API. Changes here should be reviewed as scientific changes.
 from pathlib import Path
 
 import numpy as np
-from astropy.modeling.models import Voigt1D
 from scipy.io import readsav
 
 from lyapy import lyapy
+from lyapy.models import VoigtLyaParameters, evaluate_voigt_lya_model
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -77,52 +77,22 @@ def evaluate_gj411_legacy_case():
         raw_lsf[:, 0], raw_lsf[:, 3], wave[1] - wave[0], wave
     )
 
-    (
-        stellar_velocity,
-        log_amplitude,
-        lorentz_fwhm,
-        gaussian_fwhm,
-        h1_column,
-        h1_doppler_b,
-        h1_velocity,
-        h1_column_2,
-        h1_doppler_b_2,
-        h1_velocity_2,
-        deuterium_to_hydrogen,
-        reversal_depth,
-    ) = PARAMETERS
-
-    line_center = stellar_velocity / 3.0e5 * 1215.67 + 1215.67
-    gaussian_fwhm_angstrom = gaussian_fwhm / 3.0e5 * 1215.67
-    lorentz_fwhm_angstrom = lorentz_fwhm / 3.0e5 * 1215.67
-    voigt_model = Voigt1D(
-        x_0=line_center,
-        amplitude_L=10.0**log_amplitude,
-        fwhm_L=lorentz_fwhm_angstrom,
-        fwhm_G=gaussian_fwhm_angstrom,
-    )
-    stellar_voigt = voigt_model(wave)
-    reversal = np.exp(
-        -reversal_depth * stellar_voigt / np.max(stellar_voigt)
-    )
-    intrinsic = stellar_voigt * reversal
-
+    parameters = VoigtLyaParameters.from_sequence(PARAMETERS)
+    model = evaluate_voigt_lya_model(wave, parameters, lsf_kernel)
     ism_component_1 = lyapy.total_tau_profile_func(
         wave,
-        h1_column,
-        h1_doppler_b,
-        h1_velocity,
-        deuterium_to_hydrogen,
+        parameters.h1_column,
+        parameters.h1_doppler_b,
+        parameters.h1_velocity,
+        parameters.deuterium_to_hydrogen,
     )
     ism_component_2 = lyapy.total_tau_profile_func(
         wave,
-        h1_column_2,
-        h1_doppler_b_2,
-        h1_velocity_2,
-        deuterium_to_hydrogen,
+        parameters.h1_column_2,
+        parameters.h1_doppler_b_2,
+        parameters.h1_velocity_2,
+        parameters.deuterium_to_hydrogen,
     )
-    ism_total = ism_component_1 * ism_component_2
-    model_unconvolved = intrinsic * ism_total
 
     return {
         "parameter_names": PARAMETER_NAMES,
@@ -132,14 +102,16 @@ def evaluate_gj411_legacy_case():
         "flux": flux,
         "error": error,
         "lsf_kernel": lsf_kernel,
-        "stellar_voigt": stellar_voigt,
-        "reversal": reversal,
-        "intrinsic": intrinsic,
+        "stellar_voigt": model.stellar_voigt,
+        "reversal": model.unconvolved.reversal,
+        "intrinsic": model.unconvolved.intrinsic,
         "ism_component_1": ism_component_1,
         "ism_component_2": ism_component_2,
-        "ism_total": ism_total,
-        "model_unconvolved": model_unconvolved,
-        "model_convolved": np.convolve(model_unconvolved, lsf_kernel, mode="same"),
-        "intrinsic_convolved": np.convolve(intrinsic, lsf_kernel, mode="same"),
-        "integrated_intrinsic_flux": np.array(np.trapezoid(intrinsic, wave)),
+        "ism_total": model.unconvolved.attenuation,
+        "model_unconvolved": model.unconvolved.observed,
+        "model_convolved": model.convolved.observed,
+        "intrinsic_convolved": model.convolved.intrinsic,
+        "integrated_intrinsic_flux": np.array(
+            np.trapezoid(model.unconvolved.intrinsic, wave)
+        ),
     }
