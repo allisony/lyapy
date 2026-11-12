@@ -10,6 +10,7 @@ from .models import (
     evaluate_voigt_lya_model,
 )
 from .profiles import gaussian_flux, lya_intrinsic_profile
+from .priors import legacy_bounded_log_prior
 
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "gaussian_log_likelihood",
     "interpolate_stis_lsf",
     "lya_intrinsic_profile",
+    "legacy_bounded_log_prior",
     "tau_profile",
     "total_tau_profile",
 ]

@@ -17,6 +17,7 @@ from lyapy.profiles import (
     gaussian_flux as _gaussian_flux,
     lya_intrinsic_profile_func as _lya_intrinsic_profile_func,
 )
+from lyapy.priors import legacy_bounded_log_prior
 
 pc_in_cm = 3.08567758e18
 au_in_cm = 1.49597871e13
@@ -366,25 +367,18 @@ def ready_stis_lsf(orig_lsf_wave,orig_lsf,stis_grating_disp,data_wave):
 
 ## Define priors and likelihoods, where parameters are fixed
 def lnprior(theta, minmax, prior_Gauss, prior_list):
-    assert len(theta) == len(minmax)
-
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
-    
-    priors = 0
-
-    for i in range(len(theta)):
-        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
-            return -np.inf
-        if prior_Gauss[i]: # Gaussian prior, else uniform prior (0 or np.log(h1_b))
-            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
-        elif (i == 7) and not prior_Gauss[7]: # h1_b
-            priors += np.log(h1_b)
-        else:
-            priors += 0 # not necessary, just included for clarity/completeness
-            
-    # ... no parameter was out of range
-    
-    return priors
+    names = (
+        "vs_n", "am_n", "fw_n", "vs_b", "am_b", "fw_b",
+        "h1_col", "h1_b", "h1_vel", "d2h",
+    )
+    return legacy_bounded_log_prior(
+        theta,
+        minmax,
+        prior_Gauss,
+        prior_list,
+        parameter_names=names,
+        log_weight_parameters=("h1_b",),
+    )
 
 def lnlike(theta, x, y, yerr, resolution, singcomp=False, HAW=False):
     vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h = theta
@@ -435,24 +429,19 @@ def lnprob(theta, x, y, yerr, variables):
 
 
 def lnprior_g140l(theta, minmax, prior_Gauss, prior_list):
-    assert len(theta) == len(minmax)
-
-    vs_n, am_n, fw_n, vs_b, am_b, fw_b, h1_col, h1_b, h1_vel, d2h, vs_haw, am_haw, fw_haw, vs_SiIII, am_SiIII, fw_SiIII = theta
-    
-    priors = 0
-    for i in range(len(theta)):
-        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
-            return -np.inf
-        if prior_Gauss[i]: # Gaussian prior, else uniform prior (0 or np.log(h1_b))
-            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
-        elif (i == 7) and not prior_Gauss[7]: # h1_b
-            priors += np.log(h1_b)
-        else:
-            priors += 0 # not necessary, just included for clarity/completeness
-            
-    # ... no parameter was out of range
-    
-    return priors
+    names = (
+        "vs_n", "am_n", "fw_n", "vs_b", "am_b", "fw_b",
+        "h1_col", "h1_b", "h1_vel", "d2h", "vs_haw", "am_haw",
+        "fw_haw", "vs_SiIII", "am_SiIII", "fw_SiIII",
+    )
+    return legacy_bounded_log_prior(
+        theta,
+        minmax,
+        prior_Gauss,
+        prior_list,
+        parameter_names=names,
+        log_weight_parameters=("h1_b",),
+    )
 
 ###
 
@@ -513,24 +502,18 @@ def lnprob_g140l(theta, x, y, yerr, variables):
 
 
 def lnprior_voigt(theta, minmax, prior_Gauss, prior_list):
-    assert len(theta) == len(minmax)
-
-    vs, am, fw_L, fw_G, h1_col, h1_b, h1_vel, d2h, vs_SiIII, am_SiIII, fw_SiIII, ln_f = theta
-    
-    priors = 0
-    for i in range(len(theta)):
-        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
-            return -np.inf
-        if prior_Gauss[i]: # Gaussian prior, else uniform prior (0 or np.log(h1_b))
-            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
-        elif (i == 7) and not prior_Gauss[7]: # h1_b
-            priors += np.log(h1_b)
-        else:
-            priors += 0 # not necessary, just included for clarity/completeness
-            
-    # ... no parameter was out of range
-    
-    return priors
+    names = (
+        "vs", "am", "fw_L", "fw_G", "h1_col", "h1_b", "h1_vel",
+        "d2h", "vs_SiIII", "am_SiIII", "fw_SiIII", "ln_f",
+    )
+    return legacy_bounded_log_prior(
+        theta,
+        minmax,
+        prior_Gauss,
+        prior_list,
+        parameter_names=names,
+        log_weight_parameters=("h1_b",),
+    )
 
 ###
 
@@ -616,24 +599,15 @@ def lnprob_voigt(theta, x, y, yerr, variables):
 
 
 def lnprior_voigt_cii(theta, minmax, prior_Gauss, prior_list):
-    assert len(theta) == len(minmax)
-
-    vs, am, fw, h1_col, h1_b, h1_vel = theta
-    
-    priors = 0
-    for i in range(len(theta)):
-        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
-            return -np.inf
-        if prior_Gauss[i]: # Gaussian prior, else uniform prior (0 or np.log(h1_b))
-            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
-        elif (i == 7) and not prior_Gauss[7]: # h1_b
-            priors += np.log(h1_b)
-        else:
-            priors += 0 # not necessary, just included for clarity/completeness
-            
-    # ... no parameter was out of range
-    
-    return priors
+    names = ("vs", "am", "fw", "h1_col", "h1_b", "h1_vel")
+    return legacy_bounded_log_prior(
+        theta,
+        minmax,
+        prior_Gauss,
+        prior_list,
+        parameter_names=names,
+        log_weight_parameters=("h1_b",),
+    )
 
 ###
 
@@ -775,24 +749,18 @@ def tau_profile_cii(ncols,vshifts,vdop):
 
 
 def lnprior_voigt_rev(theta, minmax, prior_Gauss, prior_list):
-    assert len(theta) == len(minmax)
-
-    vs, am, fw_L, fw_G, h1_col, h1_b, h1_vel, d2h, vs_rev, am_rev, fw_rev = theta
-    
-    priors = 0
-    for i in range(len(theta)):
-        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
-            return -np.inf
-        if prior_Gauss[i]: # Gaussian prior, else uniform prior (0 or np.log(h1_b))
-            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
-        elif (i == 7) and not prior_Gauss[7]: # h1_b
-            priors += np.log(h1_b)
-        else:
-            priors += 0 # not necessary, just included for clarity/completeness
-            
-    # ... no parameter was out of range
-    
-    return priors
+    names = (
+        "vs", "am", "fw_L", "fw_G", "h1_col", "h1_b", "h1_vel",
+        "d2h", "vs_rev", "am_rev", "fw_rev",
+    )
+    return legacy_bounded_log_prior(
+        theta,
+        minmax,
+        prior_Gauss,
+        prior_list,
+        parameter_names=names,
+        log_weight_parameters=("h1_b",),
+    )
 
 ###
 

@@ -64,3 +64,15 @@ def test_gaussian_prior_matches_direct_calculation():
     )
 
     np.testing.assert_allclose(actual, -0.5 * ((1.5 - 1.0) / 0.25) ** 2)
+
+
+def test_named_h1_b_prior_applies_intended_log_weight():
+    actual = fitting.lnprior(
+        theta=[12.0],
+        minmax=[[8.0, 20.0]],
+        prior_Gauss=[False],
+        prior_list=[0],
+        parameter_names=["h1_b"],
+    )
+
+    np.testing.assert_allclose(actual, np.log(12.0))

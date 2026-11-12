@@ -13,6 +13,7 @@ from numpyro.infer.util import log_density
 from lyapy.inference.common import (
     InferenceConfiguration,
     SpectrumData,
+    TruncatedNormalParameter,
     UniformParameter,
 )
 from lyapy.inference.dynesty_backend import build_dynesty_functions, run_dynesty
@@ -86,6 +87,48 @@ def test_numpyro_and_dynesty_log_densities_agree(synthetic_problem):
     np.testing.assert_allclose(
         numpyro_log_density,
         log_likelihood(truth) + uniform_log_prior,
+        rtol=1e-12,
+    )
+
+
+def test_truncated_normal_prior_is_shared_by_both_backends(synthetic_problem):
+    from scipy.stats import truncnorm
+
+    data, original_configuration, truth = synthetic_problem
+    parameter = TruncatedNormalParameter(
+        "log_amplitude",
+        1,
+        -10.3,
+        -9.8,
+        mean=-10.05,
+        standard_deviation=0.1,
+    )
+    configuration = InferenceConfiguration(
+        base_parameters=original_configuration.base_parameters,
+        free_parameters=(parameter,),
+    )
+    value = truth[:1]
+    log_likelihood, prior_transform = build_dynesty_functions(data, configuration)
+    numpyro_log_density, _ = log_density(
+        numpyro_spectrum_model,
+        (data, configuration),
+        {},
+        {"log_amplitude": value[0]},
+    )
+    lower = (parameter.lower - parameter.mean) / parameter.standard_deviation
+    upper = (parameter.upper - parameter.mean) / parameter.standard_deviation
+    prior_log_density = truncnorm.logpdf(
+        value[0],
+        lower,
+        upper,
+        loc=parameter.mean,
+        scale=parameter.standard_deviation,
+    )
+
+    np.testing.assert_allclose(prior_transform([0.5]), [parameter.mean])
+    np.testing.assert_allclose(
+        numpyro_log_density,
+        log_likelihood(value) + prior_log_density,
         rtol=1e-12,
     )
 

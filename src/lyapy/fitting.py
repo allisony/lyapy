@@ -5,6 +5,7 @@ import emcee
 import time
 import joblib
 from lyapy import lyapy
+from lyapy.priors import legacy_bounded_log_prior
 from corner import corner
 
 plt.ion()
@@ -46,20 +47,22 @@ plt.rc('font', family='sans-serif', size=14)
 
 
 
-def lnprior(theta, minmax, prior_Gauss, prior_list):
-
-    priors = 0
-    for i in range(len(theta)):
-        if (theta[i] < minmax[i][0]) or (theta[i] > minmax[i][1]): # a parameter is out of range
-            return -np.inf
-        if prior_Gauss[i]:
-            priors += -0.5*((theta[i]-prior_list[i][0])/prior_list[i][1])**2
-        elif theta[i] == 'h1_b' and not prior_Gauss[i]:
-            priors += np.log(theta[i])
-        else:
-            priors += 0 
-    
-    return priors
+def lnprior(
+    theta,
+    minmax,
+    prior_Gauss,
+    prior_list,
+    parameter_names=None,
+):
+    """Evaluate legacy priors, including the intended H I ``b`` weighting."""
+    return legacy_bounded_log_prior(
+        theta,
+        minmax,
+        prior_Gauss,
+        prior_list,
+        parameter_names=parameter_names,
+        log_weight_parameters=("h1_b",),
+    )
 
 
 def lnlike(theta, x, y, yerr, resolution, variables, model_function, mask_data, xerr=None,debug=False):
@@ -130,7 +133,13 @@ def lnprob(theta, x, y, yerr, resolution, variables, variables_order, model_func
     assert (i) == len(theta)
 
 
-    lp = lnprior(theta_all, range_all, prior_Gauss, prior_list)
+    lp = lnprior(
+        theta_all,
+        range_all,
+        prior_Gauss,
+        prior_list,
+        parameter_names=variables_order,
+    )
     
     if not np.isfinite(lp):
 
