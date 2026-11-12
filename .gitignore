@@ -3,6 +3,9 @@
 !requirements*.txt
 *.pyc
 *.swp
+*.egg-info/
 .DS_Store
 __pycache__/
 .pytest_cache/
+build/
+dist/
