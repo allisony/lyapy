@@ -10,3 +10,4 @@ __pycache__/
 build/
 dist/
 inference_validation*.json
+model_comparison*.json

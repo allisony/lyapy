@@ -13,10 +13,13 @@ from .diagnostics import (
     summarize_parameters,
     weighted_quantile,
 )
+from .comparison import EvidenceEstimate, ModelComparison, compare_evidence
 
 __all__ = [
     "GJ411_CONFIGURATION",
+    "EvidenceEstimate",
     "InferenceConfiguration",
+    "ModelComparison",
     "SpectrumData",
     "TruncatedNormalParameter",
     "UniformParameter",
@@ -24,4 +27,5 @@ __all__ = [
     "summarize_nuts",
     "summarize_parameters",
     "weighted_quantile",
+    "compare_evidence",
 ]
