@@ -1,0 +1,93 @@
+{
+  "problem": "synthetic GJ 411 two-parameter recovery",
+  "seed": 93,
+  "credible_interval_probability": 0.9,
+  "truth": {
+    "log_amplitude": -10.06,
+    "reversal_depth": 1.5
+  },
+  "settings": {
+    "nuts_warmup": 500,
+    "nuts_samples": 1000,
+    "nuts_chains": 2,
+    "nuts_target_accept_probability": 0.9,
+    "dynesty_live_points": 300,
+    "dynesty_stopping_log_evidence": 0.05
+  },
+  "runtime_seconds": {
+    "nuts": 6.4360534170409665,
+    "dynesty": 2.3128712920006365
+  },
+  "nuts": {
+    "parameters": {
+      "log_amplitude": {
+        "mean": -10.06008704149163,
+        "standard_deviation": 0.00508407539990526,
+        "median": -10.06031738485019,
+        "credible_interval": [
+          -10.068345710881632,
+          -10.051721622634926
+        ],
+        "truth": -10.06,
+        "truth_in_interval": true,
+        "effective_sample_size": 403.2085137693999,
+        "r_hat": 0.999415450801826
+      },
+      "reversal_depth": {
+        "mean": 1.5014449469060192,
+        "standard_deviation": 0.01709026166462,
+        "median": 1.5014083748788107,
+        "credible_interval": [
+          1.4727814806746218,
+          1.5300969713959989
+        ],
+        "truth": 1.5,
+        "truth_in_interval": true,
+        "effective_sample_size": 413.96832053263387,
+        "r_hat": 0.999873142141289
+      }
+    },
+    "chains": 2,
+    "draws_per_chain": 1000,
+    "divergences": 0,
+    "mean_acceptance_probability": 0.9656590110433854,
+    "mean_tree_steps": 11.142
+  },
+  "dynesty": {
+    "parameters": {
+      "log_amplitude": {
+        "mean": -10.05998519904825,
+        "standard_deviation": 0.005102297067606702,
+        "median": -10.060059801999266,
+        "credible_interval": [
+          -10.06846269557283,
+          -10.051326633435638
+        ],
+        "truth": -10.06,
+        "truth_in_interval": true
+      },
+      "reversal_depth": {
+        "mean": 1.5017077790717699,
+        "standard_deviation": 0.017250126368318998,
+        "median": 1.501540701806856,
+        "credible_interval": [
+          1.4733001899603053,
+          1.5317493420888268
+        ],
+        "truth": 1.5,
+        "truth_in_interval": true
+      }
+    },
+    "posterior_effective_sample_size": 1168.8852154847557,
+    "likelihood_calls": 14592,
+    "sampling_efficiency_percent": 24.102247807017545,
+    "log_evidence": 4648.325053213967,
+    "log_evidence_error": 0.1512883429226957
+  },
+  "checks": {
+    "nuts_no_divergences": true,
+    "nuts_r_hat_at_most_1_01": true,
+    "nuts_truth_in_all_intervals": true,
+    "dynesty_truth_in_all_intervals": true
+  }
+}
