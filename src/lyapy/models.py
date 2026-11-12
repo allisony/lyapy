@@ -10,7 +10,8 @@ from typing import Mapping, Sequence
 import numpy as np
 from astropy.modeling.models import Voigt1D
 
-from . import lyapy as legacy
+from .absorption import total_tau_profile
+from .instrument import interpolate_stis_lsf
 
 
 LYA_REST_WAVELENGTH = 1215.67
@@ -120,19 +121,19 @@ def evaluate_voigt_lya_model(wavelength, parameters, convolution_kernel=None):
     )
     intrinsic = stellar_voigt * reversal
 
-    attenuation_1 = legacy.total_tau_profile_func(
+    attenuation_1 = total_tau_profile(
         wave,
         parameters.h1_column,
         parameters.h1_doppler_b,
         parameters.h1_velocity,
-        parameters.deuterium_to_hydrogen,
+        deuterium_to_hydrogen=parameters.deuterium_to_hydrogen,
     )
-    attenuation_2 = legacy.total_tau_profile_func(
+    attenuation_2 = total_tau_profile(
         wave,
         parameters.h1_column_2,
         parameters.h1_doppler_b_2,
         parameters.h1_velocity_2,
-        parameters.deuterium_to_hydrogen,
+        deuterium_to_hydrogen=parameters.deuterium_to_hydrogen,
     )
     attenuation = attenuation_1 * attenuation_2
     unconvolved = LyaModelComponents(
@@ -165,7 +166,7 @@ def legacy_voigt_model(
     """Compatibility adapter for the callable expected by ``fitting.py``."""
     wave = _validate_vector(x[0], "wavelength", minimum_size=2)
     raw_lsf_wave, raw_lsf = resolution[0]
-    kernel = legacy.ready_stis_lsf(
+    kernel = interpolate_stis_lsf(
         raw_lsf_wave,
         raw_lsf,
         wave[1] - wave[0],

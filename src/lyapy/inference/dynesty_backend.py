@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
+from lyapy.likelihoods import gaussian_log_likelihood
 
 
 def build_dynesty_functions(data, configuration):
@@ -23,11 +24,7 @@ def build_dynesty_functions(data, configuration):
 
     def log_likelihood(free_values):
         model_flux = np.asarray(predict(jnp.asarray(free_values)))
-        normalized_residual = (observed - model_flux) / error
-        return float(
-            -0.5
-            * np.sum(normalized_residual**2 + np.log(2.0 * np.pi * error**2))
-        )
+        return gaussian_log_likelihood(observed, model_flux, error)
 
     return log_likelihood, configuration.transform_unit_cube
 
