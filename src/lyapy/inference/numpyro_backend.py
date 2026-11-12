@@ -40,8 +40,14 @@ def run_nuts(
     num_samples=1000,
     num_chains=1,
     progress_bar=True,
+    target_accept_probability=0.8,
+    chain_method="parallel",
 ):
-    """Run NUTS initialized at the configuration's baseline values."""
+    """Run NUTS initialized at the configuration's baseline values.
+
+    The returned sampler retains divergence, acceptance-probability, and tree-size
+    diagnostics for use by :func:`lyapy.inference.diagnostics.summarize_nuts`.
+    """
     initial_values = {
         parameter.name: configuration.base_parameters[parameter.index]
         for parameter in configuration.free_parameters
@@ -49,6 +55,7 @@ def run_nuts(
     kernel = NUTS(
         numpyro_spectrum_model,
         init_strategy=init_to_value(values=initial_values),
+        target_accept_prob=target_accept_probability,
     )
     sampler = MCMC(
         kernel,
@@ -56,6 +63,12 @@ def run_nuts(
         num_samples=num_samples,
         num_chains=num_chains,
         progress_bar=progress_bar,
+        chain_method=chain_method,
     )
-    sampler.run(rng_key, data=data, configuration=configuration)
+    sampler.run(
+        rng_key,
+        data=data,
+        configuration=configuration,
+        extra_fields=("diverging", "accept_prob", "num_steps"),
+    )
     return sampler

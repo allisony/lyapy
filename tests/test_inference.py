@@ -16,6 +16,11 @@ from lyapy.inference.common import (
     UniformParameter,
 )
 from lyapy.inference.dynesty_backend import build_dynesty_functions, run_dynesty
+from lyapy.inference.diagnostics import (
+    summarize_dynesty,
+    summarize_nuts,
+    weighted_quantile,
+)
 from lyapy.inference.numpyro_backend import numpyro_spectrum_model, run_nuts
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
 from tests._legacy_reference import PARAMETERS, evaluate_gj411_legacy_case
@@ -118,6 +123,15 @@ def test_numpyro_nuts_smoke_run(synthetic_problem):
     assert samples["model_flux"].shape == (20, data.wavelength.size)
     assert all(np.all(np.isfinite(values)) for values in samples.values())
 
+    diagnostics = summarize_nuts(
+        sampler,
+        ("log_amplitude", "reversal_depth"),
+    )
+    assert diagnostics["chains"] == 1
+    assert diagnostics["draws_per_chain"] == 20
+    assert diagnostics["divergences"] >= 0
+    assert 0.0 <= diagnostics["mean_acceptance_probability"] <= 1.0
+
 
 def test_dynesty_smoke_run(synthetic_problem):
     data, configuration, _ = synthetic_problem
@@ -132,3 +146,20 @@ def test_dynesty_smoke_run(synthetic_problem):
 
     assert sampler.results.samples.shape[1] == configuration.ndim
     assert np.all(np.isfinite(sampler.results.logl))
+
+    diagnostics = summarize_dynesty(
+        sampler,
+        ("log_amplitude", "reversal_depth"),
+    )
+    assert diagnostics["posterior_effective_sample_size"] > 0.0
+    assert diagnostics["likelihood_calls"] > 0
+    assert np.isfinite(diagnostics["log_evidence"])
+
+
+def test_weighted_quantile_validates_and_uses_weights():
+    values = np.array([0.0, 1.0, 2.0])
+
+    assert weighted_quantile(values, 0.5) == 1.0
+    assert weighted_quantile(values, 0.5, [0.05, 0.05, 0.9]) > 1.0
+    with pytest.raises(ValueError, match="positive sum"):
+        weighted_quantile(values, 0.5, np.zeros(3))
