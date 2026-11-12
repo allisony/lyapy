@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 import numpy as np
+from scipy.stats import truncnorm
 
 
 PARAMETER_NAMES = (
@@ -45,13 +46,56 @@ class UniformParameter:
                 f"invalid bounds for {self.name}: {self.lower}, {self.upper}"
             )
 
+    def transform_unit_interval(self, value):
+        """Map a unit-interval value to this prior."""
+        return self.lower + value * (self.upper - self.lower)
+
+
+@dataclass(frozen=True)
+class TruncatedNormalParameter:
+    """One free parameter with a bounded normal prior."""
+
+    name: str
+    index: int
+    lower: float
+    upper: float
+    mean: float
+    standard_deviation: float
+
+    def __post_init__(self):
+        UniformParameter(self.name, self.index, self.lower, self.upper)
+        if not self.lower <= self.mean <= self.upper:
+            raise ValueError(
+                f"mean for {self.name} must lie within its bounds"
+            )
+        if self.standard_deviation <= 0.0:
+            raise ValueError(
+                f"standard deviation for {self.name} must be positive"
+            )
+
+    def transform_unit_interval(self, value):
+        """Map a unit-interval value through the truncated-normal quantile."""
+        lower_standardized = (
+            self.lower - self.mean
+        ) / self.standard_deviation
+        upper_standardized = (
+            self.upper - self.mean
+        ) / self.standard_deviation
+        return truncnorm.ppf(
+            value,
+            lower_standardized,
+            upper_standardized,
+            loc=self.mean,
+            scale=self.standard_deviation,
+        )
+
 
 @dataclass(frozen=True)
 class InferenceConfiguration:
     """Fixed model vector plus the subset varied by an inference backend."""
 
     base_parameters: tuple[float, ...]
-    free_parameters: tuple[UniformParameter, ...]
+    free_parameters: tuple[UniformParameter | TruncatedNormalParameter, ...]
 
     def __post_init__(self):
         if len(self.base_parameters) != len(PARAMETER_NAMES):
@@ -94,9 +138,13 @@ class InferenceConfiguration:
             raise ValueError(
                 f"expected {self.ndim} unit values, got {unit_values.shape}"
             )
-        lower = np.asarray([parameter.lower for parameter in self.free_parameters])
-        upper = np.asarray([parameter.upper for parameter in self.free_parameters])
-        return lower + unit_values * (upper - lower)
+        return np.asarray(
+            [
+                parameter.transform_unit_interval(value)
+                for parameter, value in zip(self.free_parameters, unit_values)
+            ],
+            dtype=np.float64,
+        )
 
 
 @dataclass(frozen=True)

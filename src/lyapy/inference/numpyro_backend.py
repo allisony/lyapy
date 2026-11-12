@@ -6,6 +6,20 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_value
 
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
+from lyapy.inference.common import TruncatedNormalParameter, UniformParameter
+
+
+def _prior_distribution(parameter):
+    if isinstance(parameter, UniformParameter):
+        return dist.Uniform(parameter.lower, parameter.upper)
+    if isinstance(parameter, TruncatedNormalParameter):
+        return dist.TruncatedNormal(
+            parameter.mean,
+            parameter.standard_deviation,
+            low=parameter.lower,
+            high=parameter.upper,
+        )
+    raise TypeError(f"unsupported prior type: {type(parameter).__name__}")
 
 
 def numpyro_spectrum_model(data, configuration):
@@ -15,7 +29,7 @@ def numpyro_spectrum_model(data, configuration):
         free_values.append(
             numpyro.sample(
                 parameter.name,
-                dist.Uniform(parameter.lower, parameter.upper),
+                _prior_distribution(parameter),
             )
         )
     full_parameters = configuration.assemble_jax(jnp.stack(free_values))

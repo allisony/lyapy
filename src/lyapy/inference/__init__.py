@@ -4,6 +4,7 @@ from .common import (
     GJ411_CONFIGURATION,
     InferenceConfiguration,
     SpectrumData,
+    TruncatedNormalParameter,
     UniformParameter,
 )
 from .diagnostics import (
@@ -17,6 +18,7 @@ __all__ = [
     "GJ411_CONFIGURATION",
     "InferenceConfiguration",
     "SpectrumData",
+    "TruncatedNormalParameter",
     "UniformParameter",
     "summarize_dynesty",
     "summarize_nuts",
