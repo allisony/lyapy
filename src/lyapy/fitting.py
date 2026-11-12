@@ -516,7 +516,7 @@ def make_convergence_plot(sampler_chain, ndim, burnin):
             new[i] = lyapy.autocorr_new(y[:, :n])
 
 
-        axes[k].loglog(N, gw2010, "o-", label="G\&W 2010")
+        axes[k].loglog(N, gw2010, "o-", label="G&W 2010")
         axes[k].loglog(N, new, "o-", label="new")
         #ylim = plt.gca().get_ylim()
         axes[k].plot(N, N / 50.0, "--k", label=r"$\tau = N/50$")
