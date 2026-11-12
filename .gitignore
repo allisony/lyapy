@@ -1,3 +1,7 @@
 *.png
 *.txt
+!requirements*.txt
 *.pyc
+.DS_Store
+__pycache__/
+.pytest_cache/
