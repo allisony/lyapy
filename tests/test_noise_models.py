@@ -24,6 +24,11 @@ from lyapy.inference.noise import (
     augment_configuration_with_noise,
 )
 from lyapy.inference.numpyro_backend import numpyro_spectrum_model, run_nuts
+from lyapy.inference.result_diagnostics import (
+    effective_error_samples,
+    posterior_predictive_samples,
+)
+from lyapy.inference.workflow import InferenceProblem, InferenceResult
 
 
 class Convolved(NamedTuple):
@@ -196,3 +201,75 @@ def test_numpyro_samples_noise_parameters():
     assert samples["ln_error_scale"].shape == (10,)
     assert samples["model_flux"].shape == (10, data.wavelength.size)
     assert np.all(np.isfinite(samples["model_flux"]))
+
+
+def make_portable_noise_result(distribution="gaussian"):
+    data, configuration = make_problem()
+    augmented, likelihood = augment_configuration_with_noise(
+        configuration,
+        log10_jitter_bounds=(-3.0, 0.0),
+        base_log10_jitter=-1.0,
+        distribution=distribution,
+        degrees_of_freedom=5.0,
+    )
+    problem = InferenceProblem(
+        data,
+        augmented,
+        constant_forward_model,
+        likelihood_function=likelihood,
+        name=f"{distribution} noise",
+    )
+    samples = np.array(
+        [
+            [1.0, np.log(2.0), -1.0],
+            [1.1, np.log(2.0), -1.0],
+            [0.9, np.log(2.0), -1.0],
+        ]
+    )
+    predictions = np.repeat(samples[:, :1], data.wavelength.size, axis=1)
+    return InferenceResult(
+        name=problem.name,
+        backend="nuts",
+        parameter_names=tuple(
+            parameter.name for parameter in augmented.free_parameters
+        ),
+        samples=samples,
+        weights=None,
+        diagnostics={},
+        problem_specification=problem.as_dict(),
+        observations={"spectrum": data},
+        predictions={"spectrum": predictions},
+    )
+
+
+def test_portable_diagnostics_reconstruct_fitted_scale_and_jitter():
+    result = make_portable_noise_result()
+    errors = effective_error_samples(result)
+    expected = np.sqrt(
+        (2.0 * result.observations["spectrum"].error) ** 2 + 0.1**2
+    )
+
+    assert errors.shape == (3, 4)
+    np.testing.assert_allclose(
+        errors,
+        np.broadcast_to(expected, errors.shape),
+    )
+    diagnostics = result.fit_diagnostics(random_seed=59)
+    np.testing.assert_allclose(diagnostics.central_effective_error, expected)
+    assert diagnostics.likelihood_distribution == "Gaussian"
+    assert diagnostics.central_chi_squared is not None
+    assert diagnostics.minimum_effective_to_reported_error_ratio >= 2.0
+    assert diagnostics.maximum_effective_to_reported_error_ratio > 10.0
+
+
+def test_student_t_predictive_diagnostics_use_scale_not_gaussian_chi_square():
+    result = make_portable_noise_result(distribution="student_t")
+    first = posterior_predictive_samples(result, random_seed=61)
+    repeated = posterior_predictive_samples(result, random_seed=61)
+    diagnostics = result.fit_diagnostics(random_seed=61)
+
+    np.testing.assert_allclose(first, repeated)
+    assert diagnostics.likelihood_distribution == "StudentT"
+    assert "not a Gaussian" in diagnostics.likelihood_scale_description
+    assert diagnostics.central_chi_squared is None
+    assert diagnostics.reduced_chi_squared is None

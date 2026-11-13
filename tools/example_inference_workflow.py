@@ -48,7 +48,6 @@ from lyapy.inference import (  # noqa: E402
     InferenceProblem,
     SpectrumData,
     load_inference_result,
-    posterior_percentile_bands,
 )
 from lyapy.jax_components import (  # noqa: E402
     CompositeAbsorptionModel,
@@ -288,93 +287,6 @@ def run_problem(problem, backend, random_seed, quick, progress):
     )
 
 
-def make_result_plot(result):
-    """Plot the detector fit, normalized residuals, and intrinsic profile."""
-    data = result.observations["spectrum"]
-    detector_bands = result.prediction_bands()
-    lower_95, lower_68, median, upper_68, upper_95 = detector_bands
-
-    reconstruction = result.reconstructions["spectrum"]
-    intrinsic_bands = posterior_percentile_bands(
-        reconstruction.intrinsic,
-        weights=result.weights,
-    )
-    intrinsic_lower, _, intrinsic_median, _, intrinsic_upper = intrinsic_bands
-
-    scale = 1.0e12
-    figure, axes = plt.subplots(
-        3,
-        1,
-        figsize=(9.5, 9.0),
-        gridspec_kw={"height_ratios": (3, 1, 3)},
-    )
-    detector_axis, residual_axis, intrinsic_axis = axes
-    detector_axis.errorbar(
-        data.wavelength,
-        data.flux * scale,
-        yerr=data.error * scale,
-        color="0.45",
-        linewidth=0.8,
-        label="continuum-subtracted STIS data",
-    )
-    detector_axis.fill_between(
-        data.wavelength,
-        lower_95 * scale,
-        upper_95 * scale,
-        color="tab:blue",
-        alpha=0.15,
-        label="95% posterior band",
-    )
-    detector_axis.fill_between(
-        data.wavelength,
-        lower_68 * scale,
-        upper_68 * scale,
-        color="tab:blue",
-        alpha=0.3,
-        label="68% posterior band",
-    )
-    detector_axis.plot(
-        data.wavelength,
-        median * scale,
-        color="tab:blue",
-        label="posterior median",
-    )
-    detector_axis.set_ylabel(r"flux density ($10^{-12}$ units)")
-    detector_axis.legend(frameon=False)
-
-    residual_axis.axhline(0.0, color="0.4", linewidth=1.0)
-    residual_axis.plot(
-        data.wavelength,
-        (data.flux - median) / data.error,
-        color="tab:blue",
-    )
-    residual_axis.set_ylabel("residual / error")
-
-    intrinsic_axis.fill_between(
-        reconstruction.model_wavelength,
-        intrinsic_lower * scale,
-        intrinsic_upper * scale,
-        color="tab:orange",
-        alpha=0.25,
-        label="95% intrinsic-profile band",
-    )
-    intrinsic_axis.plot(
-        reconstruction.model_wavelength,
-        intrinsic_median * scale,
-        color="tab:orange",
-        label="intrinsic posterior median",
-    )
-    intrinsic_axis.set_xlabel(r"wavelength ($\AA$)")
-    intrinsic_axis.set_ylabel(r"intrinsic flux density ($10^{-12}$ units)")
-    intrinsic_axis.legend(frameon=False)
-
-    for axis in axes:
-        axis.grid(alpha=0.2)
-    figure.suptitle(result.name)
-    figure.tight_layout()
-    return figure
-
-
 def parse_arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=("nuts", "dynesty"), default="nuts")
@@ -412,15 +324,28 @@ def main():
     arguments.output_directory.mkdir(parents=True, exist_ok=True)
     output_stem = arguments.output_directory / f"gj411_{arguments.backend}_fit"
     json_path, arrays_path = result.save(output_stem)
+    # Loading requires only the JSON path; it points to the adjacent NPZ file.
+    # This round trip demonstrates that analysis and plotting do not require a
+    # live sampler object or unsafe Python-object pickling.
+    restored_result = load_inference_result(json_path)
     figure_path = output_stem.with_suffix(".png")
-    make_result_plot(result).savefig(figure_path, dpi=180)
+    restored_result.plot(random_seed=arguments.random_seed).savefig(
+        figure_path,
+        dpi=180,
+    )
     plt.close("all")
 
-    # Loading requires only the JSON path; it points to the adjacent NPZ file.
-    # This round trip demonstrates that analysis does not require a live sampler
-    # object or unsafe Python-object pickling.
-    restored_result = load_inference_result(json_path)
+    print("Parameter summary:")
     print(json.dumps(restored_result.parameter_summary(), indent=2))
+    print("Fit diagnostics:")
+    print(
+        json.dumps(
+            restored_result.fit_diagnostics(
+                random_seed=arguments.random_seed
+            ).as_dict(),
+            indent=2,
+        )
+    )
     print(f"Saved metadata: {json_path}")
     print(f"Saved numerical arrays: {arrays_path}")
     print(f"Saved fit plot: {figure_path}")

@@ -11,6 +11,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 pytest.importorskip("numpyro")
 pytest.importorskip("dynesty")
+import matplotlib.pyplot as plt
 
 from lyapy.inference import (
     InferenceConfiguration,
@@ -240,6 +241,9 @@ def test_result_round_trip_uses_json_and_non_pickle_arrays(
             loaded.reconstructions[name].intrinsic,
             dynesty_result.reconstructions[name].intrinsic,
         )
+    assert loaded.fit_diagnostics("line A", random_seed=41).as_dict() == (
+        dynesty_result.fit_diagnostics("line A", random_seed=41).as_dict()
+    )
 
 
 def test_workflow_rejects_invalid_requests_and_result_shapes(
@@ -339,3 +343,61 @@ def test_problem_comparison_requires_unique_names_and_identical_data(
             (single_problem, changed_problem),
             progress=False,
         )
+
+
+def test_result_diagnostics_distinguish_latent_and_predictive_bands(
+    nuts_result,
+):
+    diagnostics = nuts_result.fit_diagnostics(random_seed=43)
+
+    assert diagnostics.likelihood_distribution == "Gaussian"
+    assert diagnostics.likelihood_scale_description == (
+        "Gaussian standard deviation"
+    )
+    np.testing.assert_allclose(
+        diagnostics.central_effective_error,
+        nuts_result.observations["spectrum"].error,
+    )
+    assert diagnostics.central_prediction.shape == (17,)
+    assert diagnostics.latent_bands.shape == (5, 17)
+    assert diagnostics.predictive_bands.shape == (5, 17)
+    assert diagnostics.central_chi_squared >= 0.0
+    assert diagnostics.degrees_of_freedom == 16
+    assert 0.0 <= diagnostics.predictive_95_percent_coverage <= 1.0
+    assert diagnostics.as_dict()["pixels"] == 17
+    json.dumps(diagnostics.as_dict())
+    assert not np.array_equal(
+        diagnostics.latent_bands,
+        diagnostics.predictive_bands,
+    )
+    np.testing.assert_allclose(
+        nuts_result.posterior_predictive_bands(random_seed=43),
+        diagnostics.predictive_bands,
+    )
+
+    figure = nuts_result.plot(random_seed=43)
+    assert len(figure.axes) == 2
+    plt.close(figure)
+
+
+def test_joint_diagnostics_and_plots_select_a_named_spectrum(dynesty_result):
+    diagnostics = dynesty_result.fit_diagnostics("line A", random_seed=47)
+
+    assert diagnostics.spectrum == "line A"
+    assert diagnostics.degrees_of_freedom is None
+    assert diagnostics.reduced_chi_squared is None
+    assert diagnostics.central_prediction.shape == (15,)
+    figure = dynesty_result.plot("line A", random_seed=47)
+    assert len(figure.axes) == 3
+    plt.close(figure)
+
+    with pytest.raises(KeyError, match="available spectra"):
+        dynesty_result.fit_diagnostics("unknown")
+
+
+def test_comparison_result_creates_a_standard_overlay(comparison_result):
+    figure = comparison_result.plot(random_seed=53)
+
+    assert len(figure.axes) == 2
+    assert comparison_result.best_model in figure._suptitle.get_text()
+    plt.close(figure)
