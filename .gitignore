@@ -11,3 +11,4 @@ build/
 dist/
 inference_validation*.json
 model_comparison*.json
+identifiability*.json
