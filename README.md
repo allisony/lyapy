@@ -85,3 +85,56 @@ and Bayes factors relative to the highest-evidence model. The retained samplers
 remain available for model-specific posterior diagnostics and plots. Evidence
 comparisons require properly normalized likelihoods and scientifically
 defensible priors for every model.
+
+## Composable high-resolution forward model
+
+Optional JAX components support single or multiple Gaussian and Voigt emission
+profiles, relative component weights, total post-reversal intrinsic flux, and
+Gaussian-optical-depth or legacy self-reversal. A static observation operator
+evaluates the physical model on an oversampled grid, convolves it with a
+tabulated LSF, and then integrates flux density into detector-pixel bins.
+
+Run the numerical convergence and local performance check with:
+
+```bash
+python tools/validate_composable_model.py
+```
+
+The generated report measures convergence against a 64-sample-per-bin
+reference, quantifies the bias from binning before coarse convolution, and
+records JAX compilation and evaluation timings for the current machine.
+
+Components are deliberately duck-typed: a custom emission component implements
+`unit_profile(wavelength, parameters)` and `weight(parameters)`, while a custom
+reversal implements `transmission(wavelength, emission, parameters)`. Standard
+components can be assembled into a model used directly by the evidence
+framework:
+
+```python
+from lyapy.jax_components import (
+    CompositeEmissionModel,
+    GaussianOpticalDepthReversal,
+    VoigtEmissionComponent,
+)
+from lyapy.jax_composable import ComposableBinnedModel
+from lyapy.jax_instrument import build_high_resolution_operator
+
+emission = CompositeEmissionModel(
+    components=(VoigtEmissionComponent(1215.67, 0, 3, 2),),
+    log_total_flux_index=1,
+    reversal=GaussianOpticalDepthReversal(1215.67, 4, 5, 6),
+)
+operator = build_high_resolution_operator(
+    data_wavelength,
+    lsf_offsets_angstrom,
+    lsf_profile,
+    oversample=16,
+)
+forward_model = ComposableBinnedModel(emission, operator)
+```
+
+The parameter vector in this example is ordered as velocity, log total flux,
+Lorentz FWHM, Gaussian FWHM, reversal velocity, reversal FWHM, and peak reversal
+optical depth. LSF offsets must be wavelength offsets; production use must also
+confirm whether a supplied instrumental LSF already includes detector-pixel
+response before adding any separate pixel-response convolution.

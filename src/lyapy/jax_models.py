@@ -131,6 +131,42 @@ def _stellar_voigt(wavelength, line_center, amplitude, lorentz_fwhm, gaussian_fw
     )
 
 
+def stellar_voigt_profile_jax(
+    wavelength,
+    line_center,
+    lorentz_fwhm,
+    gaussian_fwhm,
+):
+    """Return a differentiable unit-amplitude Voigt profile in wavelength units."""
+    _require_x64()
+    return _stellar_voigt(
+        jnp.asarray(wavelength, dtype=jnp.float64),
+        line_center,
+        1.0,
+        lorentz_fwhm,
+        gaussian_fwhm,
+    )
+
+
+def normalized_voigt_profile_jax(
+    wavelength,
+    line_center,
+    lorentz_fwhm,
+    gaussian_fwhm,
+):
+    """Return a Voigt probability density normalized over infinite wavelength."""
+    _require_x64()
+    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
+    gaussian_sigma = gaussian_fwhm / (2.0 * jnp.sqrt(2.0 * jnp.log(2.0)))
+    lorentz_hwhm = 0.5 * lorentz_fwhm
+    z = (
+        (wavelength - line_center) + 1j * lorentz_hwhm
+    ) / (gaussian_sigma * jnp.sqrt(2.0))
+    return jnp.real(_humlicek_faddeeva(z)) / (
+        gaussian_sigma * jnp.sqrt(2.0 * jnp.pi)
+    )
+
+
 def _harris_voigt(a_parameter, u_parameter):
     """JAX port of the Harris expansion used by the legacy absorption model."""
     u = jnp.abs(u_parameter)

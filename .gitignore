@@ -17,3 +17,4 @@ full_recovery*.json
 gj411_inference*.json
 gj411_inference*.npz
 gj411_model_comparison*.json
+composable_validation*.json
