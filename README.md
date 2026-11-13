@@ -26,14 +26,19 @@ python tools/plot_jax_comparison.py
 ## Inference prototype
 
 NumPyro/NUTS and dynesty adapters share the same parameter configuration,
-uniform priors, JAX forward model, and Gaussian likelihood. Install the
-optional dependencies and run the two-parameter synthetic recovery check with:
+priors, JAX forward model, and Gaussian likelihood. Install the optional
+dependencies and run the validation sequence with:
 
 ```bash
-python -m pip install -r requirements-inference.txt
+python -m pip install -e '.[inference]'
 python tools/run_inference_smoke_test.py
+python tools/run_stellar_recovery.py
+python tools/run_full_recovery.py
+python tools/run_gj411_inference.py
 ```
 
-This smoke test varies only log amplitude and reversal depth. Expanding to the
-full GJ 411 parameter set should follow convergence and prior validation rather
-than simply increasing the dimensionality of this example.
+The smoke test varies two parameters. The recovery scripts then validate five
+stellar parameters and the full eight-parameter stellar-plus-ISM model on
+synthetic spectra. The final command fits the observed GJ 411 STIS E140M
+spectrum and writes posterior, spectrum, and JSON diagnostic products. These
+runs keep D/H, the inactive second absorber, and the tabulated STIS LSF fixed.
