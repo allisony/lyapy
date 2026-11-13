@@ -9,6 +9,13 @@ from .models import (
     VoigtLyaParameters,
     evaluate_voigt_lya_model,
 )
+from .observations import (
+    ObservedSpectrum,
+    PreparedObservation,
+    TabulatedLsf,
+    load_gj411_observation,
+    prepare_stis_observation,
+)
 from .profiles import gaussian_flux, lya_intrinsic_profile
 from .priors import legacy_bounded_log_prior
 
@@ -16,6 +23,9 @@ from .priors import legacy_bounded_log_prior
 __all__ = [
     "LyaForwardModelResult",
     "LyaModelComponents",
+    "ObservedSpectrum",
+    "PreparedObservation",
+    "TabulatedLsf",
     "VoigtLyaParameters",
     "evaluate_voigt_lya_model",
     "gaussian_flux",
@@ -24,6 +34,8 @@ __all__ = [
     "interpolate_stis_lsf",
     "lya_intrinsic_profile",
     "legacy_bounded_log_prior",
+    "load_gj411_observation",
+    "prepare_stis_observation",
     "tau_profile",
     "total_tau_profile",
 ]

@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from lyapy.inference.common import (
+    GJ411_CONFIGURATION,
     InferenceConfiguration,
     SpectrumData,
     UniformParameter,
@@ -38,7 +39,7 @@ from lyapy.inference.diagnostics import summarize_dynesty, summarize_nuts
 from lyapy.inference.dynesty_backend import run_dynesty
 from lyapy.inference.numpyro_backend import run_nuts
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
-from tests._legacy_reference import PARAMETERS, evaluate_gj411_legacy_case
+from lyapy.observations import load_gj411_observation
 
 
 PARAMETER_NAMES = ("log_amplitude", "reversal_depth")
@@ -47,10 +48,10 @@ PARAMETER_LABELS = ("log amplitude", "reversal depth")
 
 def make_synthetic_problem(seed, noise_standard_deviation=5e-14):
     """Return noisy synthetic data, priors, and generating parameters."""
-    reference = evaluate_gj411_legacy_case()
-    wave = np.asarray(reference["wave"], dtype=np.float64)
-    kernel = np.asarray(reference["lsf_kernel"], dtype=np.float64)
-    parameters = np.asarray(PARAMETERS, dtype=np.float64)
+    observation = load_gj411_observation()
+    wave = observation.wavelength
+    kernel = observation.convolution_kernel
+    parameters = np.asarray(GJ411_CONFIGURATION.base_parameters, dtype=np.float64)
     truth_flux = np.asarray(
         evaluate_voigt_lya_model_jax(wave, parameters, kernel).convolved.observed
     )
