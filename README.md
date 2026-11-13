@@ -235,6 +235,41 @@ parameter: for one spectrum that shift is degenerate with wavelength
 calibration and the stellar/ISM velocity parameters, and should instead be
 handled by an explicitly constrained wavelength-calibration model.
 
+### Batched posterior reconstruction
+
+Posterior profiles are evaluated with JAX batches rather than a Python loop.
+For workflows that evaluate more than one posterior sample set for the same
+data and model—such as the paired NUTS and dynesty products—reuse one compiled
+`ReconstructionEvaluator`:
+
+```python
+from lyapy.inference.reconstruction import ReconstructionEvaluator
+
+evaluator = ReconstructionEvaluator(
+    data,
+    configuration,
+    forward_model=forward_model,
+)
+nuts_reconstruction = evaluator.evaluate(nuts_parameter_draws)
+dynesty_reconstruction = evaluator.evaluate(dynesty_parameter_draws)
+```
+
+This avoids retracing and rebuilding the same JAX batch. Set `batch_size` when
+constructing the evaluator to process very large posterior sets in bounded
+chunks; the default vectorizes all draws for maximum throughput. Composable
+models read `total_flux` directly from the sampled parameter, so posterior
+flux summaries do not numerically reintegrate every intrinsic profile.
+
+Measure performance and verify full-batch/chunked numerical equivalence on the
+current machine with:
+
+```bash
+python tools/benchmark_posterior_products.py
+```
+
+The generated JSON records both throughputs, speedup, and maximum numerical
+difference; timings are hardware- and JAX-backend-dependent.
+
 ## Joint fits to multiple spectral lines
 
 `JointSpectrumData` and `JointForwardModel` allow any number of named spectra

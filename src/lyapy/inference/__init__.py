@@ -65,6 +65,7 @@ from .noise import (
 )
 from .reconstruction import (
     DEFAULT_PERCENTILE_PROBABILITIES,
+    ReconstructionEvaluator,
     ReconstructionSamples,
     evaluate_reconstruction_samples,
     posterior_percentile_bands,
@@ -96,6 +97,7 @@ __all__ = [
     "NamedLikelihood",
     "NamedSpectrumData",
     "ReconstructionSamples",
+    "ReconstructionEvaluator",
     "SpectrumData",
     "StudentTNoiseModel",
     "TruncatedNormalParameter",

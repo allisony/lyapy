@@ -17,7 +17,10 @@ from lyapy.inference.composable import (
 )
 from lyapy.inference.dynesty_backend import build_dynesty_functions
 from lyapy.inference.numpyro_backend import numpyro_spectrum_model, run_nuts
-from lyapy.inference.reconstruction import evaluate_reconstruction_samples
+from lyapy.inference.reconstruction import (
+    ReconstructionEvaluator,
+    evaluate_reconstruction_samples,
+)
 
 
 @pytest.fixture(scope="module")
@@ -128,6 +131,34 @@ def test_composable_reconstruction_uses_direct_total_flux(composable_problem):
         10.0 ** values[:, 1],
         rtol=2e-13,
     )
+
+    evaluator = ReconstructionEvaluator(
+        problem.data,
+        configuration,
+        forward_model=problem.forward_model,
+        batch_size=1,
+    )
+    chunked = evaluator.evaluate(values)
+    repeated = evaluator.evaluate(values)
+    np.testing.assert_allclose(chunked.intrinsic, reconstruction.intrinsic)
+    np.testing.assert_allclose(
+        chunked.convolved_observed,
+        reconstruction.convolved_observed,
+    )
+    np.testing.assert_allclose(
+        chunked.integrated_intrinsic_flux,
+        reconstruction.integrated_intrinsic_flux,
+    )
+    np.testing.assert_allclose(repeated.intrinsic, chunked.intrinsic)
+
+    with pytest.raises(ValueError, match="batch_size"):
+        evaluate_reconstruction_samples(
+            problem.data,
+            configuration,
+            values,
+            forward_model=problem.forward_model,
+            batch_size=0,
+        )
 
 
 def test_numpyro_accepts_composable_forward_model(composable_problem):

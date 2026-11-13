@@ -317,3 +317,29 @@ def test_reconstruction_summaries_support_weighted_samples():
     np.testing.assert_allclose(unweighted, [[1.0, 2.0]])
     assert np.all(weighted > unweighted)
     assert flux_summary["percentiles"][0] > 2.0
+
+
+def test_weighted_profile_bands_match_columnwise_reference():
+    random = np.random.default_rng(82)
+    profiles = random.normal(size=(37, 19))
+    weights = random.uniform(size=37)
+    weights[::7] = 0.0
+    probabilities = (0.025, 0.5, 0.975)
+    expected = np.column_stack(
+        [
+            weighted_quantile(
+                profiles[:, index],
+                probabilities,
+                weights,
+            )
+            for index in range(profiles.shape[1])
+        ]
+    )
+
+    actual = posterior_percentile_bands(
+        profiles,
+        probabilities=probabilities,
+        weights=weights,
+    )
+
+    np.testing.assert_allclose(actual, expected, rtol=0.0, atol=0.0)
