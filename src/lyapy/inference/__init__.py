@@ -72,6 +72,12 @@ from .reconstruction import (
     posterior_percentile_bands,
     summarize_integrated_flux,
 )
+from .workflow import (
+    InferenceProblem,
+    InferenceResult,
+    load_inference_result,
+    run_inference,
+)
 
 __all__ = [
     "GJ411_CONFIGURATION",
@@ -85,6 +91,8 @@ __all__ = [
     "EvidenceRanking",
     "InferenceConfiguration",
     "InferenceConfigurationBuilder",
+    "InferenceProblem",
+    "InferenceResult",
     "ComposableInferenceProblem",
     "IdentifiabilityResult",
     "JointForwardModel",
@@ -115,12 +123,14 @@ __all__ = [
     "compare_evidence",
     "rank_evidence",
     "run_evidence_comparison",
+    "run_inference",
     "analyze_local_identifiability",
     "prior_standard_deviation",
     "build_gj411_composable_forward_model",
     "build_gj411_observation_operator",
     "build_gj411_model_catalog",
     "load_gj411_composable_problem",
+    "load_inference_result",
     "make_model_catalog_entry",
     "augment_configuration_with_noise",
     "augment_configuration_with_lsf_width",
