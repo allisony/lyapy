@@ -51,10 +51,13 @@ PARAMETER_LABELS = (
 )
 
 
-def make_synthetic_problem(seed, noise_standard_deviation=5e-14):
-    """Generate one reproducible noisy spectrum from the five-parameter truth."""
+def make_synthetic_problem(
+    seed,
+    configuration=GJ411_STELLAR_CONFIGURATION,
+    noise_standard_deviation=5e-14,
+):
+    """Generate one reproducible noisy spectrum for a parameter configuration."""
     observation = load_gj411_observation()
-    configuration = GJ411_STELLAR_CONFIGURATION
     parameters = np.asarray(configuration.base_parameters, dtype=np.float64)
     truth_flux = np.asarray(
         evaluate_voigt_lya_model_jax(
@@ -95,15 +98,22 @@ def normalized_dynesty_weights(sampler):
     return weights / np.sum(weights)
 
 
-def make_corner_plot(nuts_samples, nested, truth):
+def make_corner_plot(
+    nuts_samples,
+    nested,
+    truth,
+    parameter_names=PARAMETER_NAMES,
+    parameter_labels=PARAMETER_LABELS,
+    title="Five-parameter synthetic GJ 411 recovery",
+):
     """Overlay NUTS and dynesty joint posteriors."""
-    truths = np.asarray([truth[name] for name in PARAMETER_NAMES])
+    truths = np.asarray([truth[name] for name in parameter_names])
     nuts_matrix = np.column_stack(
-        [np.asarray(nuts_samples[name]) for name in PARAMETER_NAMES]
+        [np.asarray(nuts_samples[name]) for name in parameter_names]
     )
     weights = normalized_dynesty_weights(nested)
     ranges = []
-    for index, name in enumerate(PARAMETER_NAMES):
+    for index, name in enumerate(parameter_names):
         nuts_limits = np.quantile(nuts_matrix[:, index], (0.005, 0.995))
         dynesty_limits = weighted_quantile(
             nested.results.samples[:, index],
@@ -116,7 +126,7 @@ def make_corner_plot(nuts_samples, nested, truth):
         ranges.append((lower - padding, upper + padding))
     figure = corner.corner(
         nuts_matrix,
-        labels=PARAMETER_LABELS,
+        labels=parameter_labels,
         truths=truths,
         color="#d6278b",
         truth_color="black",
@@ -129,7 +139,7 @@ def make_corner_plot(nuts_samples, nested, truth):
     corner.corner(
         nested.results.samples,
         weights=weights,
-        labels=PARAMETER_LABELS,
+        labels=parameter_labels,
         color="#1f77b4",
         plot_datapoints=False,
         fill_contours=False,
@@ -146,14 +156,21 @@ def make_corner_plot(nuts_samples, nested, truth):
         loc="upper right",
         frameon=False,
     )
-    figure.suptitle("Five-parameter synthetic GJ 411 recovery", y=1.01)
+    figure.suptitle(title, y=1.01)
     return figure
 
 
-def make_spectrum_plot(data, configuration, nuts_samples, nested):
+def make_spectrum_plot(
+    data,
+    configuration,
+    nuts_samples,
+    nested,
+    parameter_names=PARAMETER_NAMES,
+    title="Five-parameter posterior representative curves",
+):
     """Compare posterior representative curves with the synthetic spectrum."""
     nuts_median = np.asarray(
-        [np.median(nuts_samples[name]) for name in PARAMETER_NAMES]
+        [np.median(nuts_samples[name]) for name in parameter_names]
     )
     dynesty_mean = np.average(
         nested.results.samples,
@@ -210,7 +227,7 @@ def make_spectrum_plot(data, configuration, nuts_samples, nested):
     residual_axis.set_xlabel(r"wavelength ($\AA$)")
     residual_axis.set_ylabel("residual / error")
     residual_axis.grid(alpha=0.2)
-    figure.suptitle("Five-parameter posterior representative curves")
+    figure.suptitle(title)
     figure.tight_layout()
     return figure
 
@@ -235,8 +252,8 @@ def make_checks(nuts_summary, dynesty_summary):
     }
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description=__doc__)
+def parse_arguments(default_output_prefix="stellar_recovery", description=__doc__):
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--warmup", type=int, default=1000)
     parser.add_argument("--samples", type=int, default=2000)
     parser.add_argument("--chains", type=int, default=2)
@@ -252,19 +269,32 @@ def parse_arguments():
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=Path("stellar_recovery"),
+        default=Path(default_output_prefix),
     )
     parser.add_argument("--no-progress", action="store_true")
     return parser.parse_args()
 
 
-def main():
-    arguments = parse_arguments()
+def main(
+    configuration=GJ411_STELLAR_CONFIGURATION,
+    parameter_labels=PARAMETER_LABELS,
+    problem="synthetic GJ 411 five-parameter stellar recovery",
+    plot_title="Five-parameter synthetic GJ 411 recovery",
+    default_output_prefix="stellar_recovery",
+    description=__doc__,
+):
+    arguments = parse_arguments(default_output_prefix, description)
+    parameter_names = tuple(
+        parameter.name for parameter in configuration.free_parameters
+    )
     prefix = arguments.output_prefix
     corner_path = prefix.with_name(prefix.name + "_corner.png")
     spectrum_path = prefix.with_name(prefix.name + "_spectrum.png")
     report_path = prefix.with_name(prefix.name + ".json")
-    data, configuration, truth = make_synthetic_problem(arguments.seed)
+    data, configuration, truth = make_synthetic_problem(
+        arguments.seed,
+        configuration,
+    )
 
     start = perf_counter()
     nuts = run_nuts(
@@ -293,10 +323,10 @@ def main():
     )
     dynesty_seconds = perf_counter() - start
 
-    nuts_summary = summarize_nuts(nuts, PARAMETER_NAMES, truth=truth)
-    dynesty_summary = summarize_dynesty(nested, PARAMETER_NAMES, truth=truth)
+    nuts_summary = summarize_nuts(nuts, parameter_names, truth=truth)
+    dynesty_summary = summarize_dynesty(nested, parameter_names, truth=truth)
     report = {
-        "problem": "synthetic GJ 411 five-parameter stellar recovery",
+        "problem": problem,
         "seed": arguments.seed,
         "truth": truth,
         "priors": {
@@ -319,12 +349,21 @@ def main():
         "checks": make_checks(nuts_summary, dynesty_summary),
     }
 
-    corner_figure = make_corner_plot(nuts.get_samples(), nested, truth)
+    corner_figure = make_corner_plot(
+        nuts.get_samples(),
+        nested,
+        truth,
+        parameter_names=parameter_names,
+        parameter_labels=parameter_labels,
+        title=plot_title,
+    )
     spectrum_figure = make_spectrum_plot(
         data,
         configuration,
         nuts.get_samples(),
         nested,
+        parameter_names=parameter_names,
+        title=plot_title + " curves",
     )
     prefix.parent.mkdir(parents=True, exist_ok=True)
     corner_figure.savefig(corner_path, dpi=180, bbox_inches="tight")
