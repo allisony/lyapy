@@ -312,6 +312,32 @@ terms occupy their own indices. Both dynesty and NumPyro sum the normalized
 per-spectrum log likelihoods, so the same joint hypothesis also works with the
 evidence-comparison framework.
 
+`InferenceConfigurationBuilder` assigns indices as parameters are declared,
+so custom and joint models do not need fragile hand-counted parameter vectors.
+It never selects priors automatically:
+
+```python
+from lyapy.inference import InferenceConfigurationBuilder
+
+parameters = InferenceConfigurationBuilder()
+stellar_velocity = parameters.add_uniform(
+    "stellar_velocity", initial=-20.0, lower=-60.0, upper=20.0
+)
+lya_flux = parameters.add_uniform(
+    "lya_log_total_flux", initial=-11.8, lower=-12.5, upper=-11.0
+)
+si3_flux = parameters.add_uniform(
+    "si3_log_total_flux", initial=-13.0, lower=-13.8, upper=-12.3
+)
+configuration = parameters.build()
+```
+
+Pass `stellar_velocity` to every emission component that shares that velocity;
+pass `lya_flux` and `si3_flux` only to their respective models. Use
+`parameters.index("stellar_velocity")` when a later custom component needs an
+already-declared shared parameter. Fixed and truncated-normal parameters are
+also supported.
+
 ```python
 from lyapy.inference.joint import (
     JointForwardModel,

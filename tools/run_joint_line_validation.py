@@ -25,9 +25,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from lyapy.inference.common import (
-    InferenceConfiguration,
+    InferenceConfigurationBuilder,
     SpectrumData,
-    UniformParameter,
 )
 from lyapy.inference.diagnostics import summarize_nuts
 from lyapy.inference.joint import (
@@ -67,22 +66,29 @@ def gaussian_operator(wavelength, sigma=0.018, oversample=8):
     )
 
 
-def build_joint_forward_model(lya_wavelength, si3_wavelength, oversample=8):
+def build_joint_forward_model(
+    lya_wavelength,
+    si3_wavelength,
+    configuration,
+    oversample=8,
+):
+    index = configuration.parameter_names.index
+    shared_velocity = index("shared_velocity")
     lya = ComposableBinnedModel(
         gaussian_emission_model_for_line_group(
             "lya",
-            velocity_index=0,
-            fwhm_index=2,
-            log_total_flux_index=1,
+            velocity_index=shared_velocity,
+            fwhm_index=index("lya_fwhm"),
+            log_total_flux_index=index("lya_log_total_flux"),
         ),
         gaussian_operator(lya_wavelength, oversample=oversample),
     )
     si3 = ComposableBinnedModel(
         gaussian_emission_model_for_line_group(
             "si_iii_1206",
-            velocity_index=0,
-            fwhm_index=4,
-            log_total_flux_index=3,
+            velocity_index=shared_velocity,
+            fwhm_index=index("si3_fwhm"),
+            log_total_flux_index=index("si3_log_total_flux"),
         ),
         gaussian_operator(si3_wavelength, oversample=oversample),
     )
@@ -95,28 +101,25 @@ def build_joint_forward_model(lya_wavelength, si3_wavelength, oversample=8):
 
 
 def make_configuration():
-    return InferenceConfiguration(
-        base_parameters=TRUTH_PARAMETERS,
-        free_parameters=(
-            UniformParameter(PARAMETER_NAMES[0], 0, -60.0, 20.0),
-            UniformParameter(PARAMETER_NAMES[1], 1, -12.5, -11.0),
-            UniformParameter(PARAMETER_NAMES[2], 2, 20.0, 160.0),
-            UniformParameter(PARAMETER_NAMES[3], 3, -13.8, -12.3),
-            UniformParameter(PARAMETER_NAMES[4], 4, 15.0, 100.0),
-        ),
-        parameter_names=PARAMETER_NAMES,
-    )
+    builder = InferenceConfigurationBuilder()
+    builder.add_uniform(PARAMETER_NAMES[0], TRUTH_PARAMETERS[0], -60.0, 20.0)
+    builder.add_uniform(PARAMETER_NAMES[1], TRUTH_PARAMETERS[1], -12.5, -11.0)
+    builder.add_uniform(PARAMETER_NAMES[2], TRUTH_PARAMETERS[2], 20.0, 160.0)
+    builder.add_uniform(PARAMETER_NAMES[3], TRUTH_PARAMETERS[3], -13.8, -12.3)
+    builder.add_uniform(PARAMETER_NAMES[4], TRUTH_PARAMETERS[4], 15.0, 100.0)
+    return builder.build()
 
 
 def make_synthetic_problem(seed, oversample=8):
     lya_wavelength = np.linspace(1215.05, 1216.28, 90)
     si3_wavelength = np.linspace(1206.20, 1206.80, 65)
+    configuration = make_configuration()
     forward_model = build_joint_forward_model(
         lya_wavelength,
         si3_wavelength,
+        configuration,
         oversample=oversample,
     )
-    configuration = make_configuration()
     truth = jnp.asarray(configuration.base_parameters)
     empty_data = JointSpectrumData(
         (
