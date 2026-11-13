@@ -46,6 +46,11 @@ from .model_catalog import (
     build_gj411_model_catalog,
     make_model_catalog_entry,
 )
+from .multiplet import (
+    MultipletForwardModel,
+    MultipletRatioHypotheses,
+    make_multiplet_ratio_hypotheses,
+)
 from .lsf import augment_configuration_with_lsf_width
 from .joint import (
     JointForwardModel,
@@ -95,6 +100,8 @@ __all__ = [
     "ModelEvidenceRun",
     "ModelHypothesis",
     "ModelSelectionResult",
+    "MultipletForwardModel",
+    "MultipletRatioHypotheses",
     "NamedForwardModel",
     "NamedLikelihood",
     "NamedSpectrumData",
@@ -122,6 +129,7 @@ __all__ = [
     "build_gj411_model_catalog",
     "load_gj411_composable_problem",
     "make_model_catalog_entry",
+    "make_multiplet_ratio_hypotheses",
     "augment_configuration_with_noise",
     "augment_configuration_with_lsf_width",
     "evaluate_jax_log_likelihood",

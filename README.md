@@ -128,6 +128,35 @@ remain available for model-specific posterior diagnostics and plots. Evidence
 comparisons require properly normalized likelihoods and scientifically
 defensible priors for every model.
 
+For a resonance multiplet, `make_multiplet_ratio_hypotheses` constructs a
+matched pair that differs only in whether the component ratio is fixed or
+sampled. For example, N V can compare an explicit 2:1 hypothesis with a free
+1242-to-1238 ratio:
+
+```python
+from lyapy.inference import make_multiplet_ratio_hypotheses
+
+nv_hypotheses = make_multiplet_ratio_hypotheses(
+    "n_v_1238_1242",
+    nv_observation_operator,
+    configuration,
+    velocity_index=stellar_velocity,
+    log_total_flux_index=nv_flux,
+    gaussian_fwhm_index=nv_width,
+    log_relative_weight_indices=(nv_log_1242_to_1238,),
+    fixed_relative_weights=(2.0, 1.0),
+)
+result = run_evidence_comparison(data, nv_hypotheses.hypotheses)
+```
+
+The supplied `configuration` defines the free-ratio prior; lyapy does not
+choose it. The fixed model removes only the ratio parameter, preserving every
+common prior, the observation operator, optional ISM absorption, and the
+likelihood. Supplying a Lorentz-width index builds the same comparison with
+Voigt rather than Gaussian emission. Reports serialize the line catalog entry,
+profile family, ratio mode, fixed weights or free-ratio parameter names, and
+whether ISM absorption is included.
+
 ## Composable high-resolution forward model
 
 Optional JAX components support single or multiple Gaussian and Voigt emission
