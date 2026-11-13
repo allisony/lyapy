@@ -9,9 +9,11 @@ import jax.numpy as jnp
 from scipy.special import voigt_profile
 
 from lyapy.jax_models import (
+    _interpolate_harris_tables,
     evaluate_voigt_lya_model_jax,
     normalized_voigt_profile_jax,
 )
+from lyapy import voigt as legacy_voigt
 from tests._legacy_reference import PARAMETERS, evaluate_gj411_legacy_case
 
 
@@ -43,6 +45,38 @@ def test_jax_model_matches_numpy_baseline(model_inputs):
         np.abs(result.convolved.observed - reference["model_convolved"])
     ) / np.max(np.abs(reference["model_convolved"]))
     assert model_error < 6e-5
+
+
+def test_direct_harris_table_interpolation_matches_binary_search():
+    u = jnp.asarray(
+        [0.0, 0.0037, 1.2345, 7.8912, 19.985, 19.99, 25.0]
+    )
+    expected_h1 = jnp.interp(u, legacy_voigt.uvals, legacy_voigt.H1)
+    expected_h3 = jnp.interp(u, legacy_voigt.uvals, legacy_voigt.H3)
+    actual_h1, actual_h3 = _interpolate_harris_tables(u)
+
+    np.testing.assert_allclose(actual_h1, expected_h1, rtol=2e-14, atol=1e-15)
+    np.testing.assert_allclose(actual_h3, expected_h3, rtol=2e-14, atol=1e-15)
+
+    test_u = jnp.asarray([0.0037, 1.2345, 7.8912, 19.985])
+    actual_gradient = jax.grad(
+        lambda values: sum(
+            jnp.sum(table)
+            for table in _interpolate_harris_tables(values)
+        )
+    )(test_u)
+    expected_gradient = jax.grad(
+        lambda values: jnp.sum(
+            jnp.interp(values, legacy_voigt.uvals, legacy_voigt.H1)
+            + jnp.interp(values, legacy_voigt.uvals, legacy_voigt.H3)
+        )
+    )(test_u)
+    np.testing.assert_allclose(
+        actual_gradient,
+        expected_gradient,
+        rtol=2e-12,
+        atol=2e-12,
+    )
 
 
 def test_normalized_jax_voigt_matches_scipy_probability_density():
