@@ -1,4 +1,6 @@
-"""NumPyro/NUTS adapter for the differentiable Lyman-alpha model."""
+"""NumPyro/NUTS adapter for differentiable Lyman-alpha models."""
+
+from functools import partial
 
 import jax.numpy as jnp
 import numpyro
@@ -22,8 +24,12 @@ def _prior_distribution(parameter):
     raise TypeError(f"unsupported prior type: {type(parameter).__name__}")
 
 
-def numpyro_spectrum_model(data, configuration):
-    """NumPyro model using the shared uniform-prior configuration."""
+def numpyro_spectrum_model(
+    data,
+    configuration,
+    forward_model=evaluate_voigt_lya_model_jax,
+):
+    """NumPyro model using a shared configuration and forward model."""
     free_values = []
     for parameter in configuration.free_parameters:
         free_values.append(
@@ -33,7 +39,7 @@ def numpyro_spectrum_model(data, configuration):
             )
         )
     full_parameters = configuration.assemble_jax(jnp.stack(free_values))
-    prediction = evaluate_voigt_lya_model_jax(
+    prediction = forward_model(
         jnp.asarray(data.wavelength),
         full_parameters,
         jnp.asarray(data.convolution_kernel),
@@ -57,6 +63,7 @@ def run_nuts(
     target_accept_probability=0.8,
     chain_method="parallel",
     dense_mass=False,
+    forward_model=evaluate_voigt_lya_model_jax,
 ):
     """Run NUTS initialized at the configuration's baseline values.
 
@@ -67,8 +74,9 @@ def run_nuts(
         parameter.name: configuration.base_parameters[parameter.index]
         for parameter in configuration.free_parameters
     }
+    model = partial(numpyro_spectrum_model, forward_model=forward_model)
     kernel = NUTS(
-        numpyro_spectrum_model,
+        model,
         init_strategy=init_to_value(values=initial_values),
         target_accept_prob=target_accept_probability,
         dense_mass=dense_mass,

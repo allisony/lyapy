@@ -36,6 +36,7 @@ python tools/run_stellar_recovery.py
 python tools/run_full_recovery.py
 python tools/run_gj411_inference.py
 python tools/run_gj411_model_comparison.py
+python tools/run_composable_model_comparison.py
 ```
 
 The smoke test varies two parameters. The recovery scripts then validate five
@@ -49,6 +50,11 @@ The final model-comparison command measures whether the observed spectrum
 supports a self-reversed intrinsic profile relative to a zero-reversal model.
 Its documented default prior on reversal depth is uniform from 0 to 1.8; use
 `--reversal-max` for an explicit prior-sensitivity run.
+
+The composable comparison command uses the corrected high-resolution order of
+operations, untruncated H I/D I absorption, a direct intrinsic-total-flux
+parameter, and the detector-bin integration operator. It records the complete
+model and prior specification alongside the evidence results.
 
 ### Comparing arbitrary models
 

@@ -16,12 +16,18 @@ DEFAULT_PERCENTILE_PROBABILITIES = (0.025, 0.159, 0.5, 0.841, 0.975)
 class ReconstructionSamples(NamedTuple):
     """Profile and integrated-flux values for posterior parameter draws."""
 
+    model_wavelength: np.ndarray
     intrinsic: np.ndarray
     convolved_observed: np.ndarray
     integrated_intrinsic_flux: np.ndarray
 
 
-def evaluate_reconstruction_samples(data, configuration, free_values):
+def evaluate_reconstruction_samples(
+    data,
+    configuration,
+    free_values,
+    forward_model=evaluate_voigt_lya_model_jax,
+):
     """Evaluate reconstructed profiles for an array of free-parameter draws."""
     values = np.asarray(free_values, dtype=np.float64)
     if values.ndim != 2 or values.shape[1] != configuration.ndim:
@@ -30,18 +36,34 @@ def evaluate_reconstruction_samples(data, configuration, free_values):
         )
     wave = jnp.asarray(data.wavelength)
     kernel = jnp.asarray(data.convolution_kernel)
+    baseline_result = forward_model(
+        wave,
+        jnp.asarray(configuration.base_parameters),
+        kernel,
+    )
+    model_wavelength = jnp.asarray(
+        getattr(baseline_result, "model_wavelength", wave)
+    )
+    has_direct_total_flux = hasattr(
+        baseline_result.unconvolved,
+        "total_flux",
+    )
 
     def evaluate_one(draw):
         parameters = configuration.assemble_jax(draw)
-        result = evaluate_voigt_lya_model_jax(wave, parameters, kernel)
+        result = forward_model(wave, parameters, kernel)
         intrinsic = result.unconvolved.intrinsic
-        integrated_flux = jnp.trapezoid(intrinsic, wave)
+        if has_direct_total_flux:
+            integrated_flux = result.unconvolved.total_flux
+        else:
+            integrated_flux = jnp.trapezoid(intrinsic, model_wavelength)
         return intrinsic, result.convolved.observed, integrated_flux
 
     intrinsic, convolved_observed, integrated_flux = jax.jit(
         jax.vmap(evaluate_one)
     )(jnp.asarray(values))
     return ReconstructionSamples(
+        model_wavelength=np.asarray(model_wavelength),
         intrinsic=np.asarray(intrinsic),
         convolved_observed=np.asarray(convolved_observed),
         integrated_intrinsic_flux=np.asarray(integrated_flux),

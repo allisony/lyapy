@@ -246,9 +246,15 @@ def make_reversal_comparison_configurations(
     """Return matched free-reversal and zero-reversal configurations."""
     if reversal_lower < 0.0:
         raise ValueError("reversal depth cannot be negative")
+    try:
+        reversal_index = configuration.parameter_names.index("reversal_depth")
+    except ValueError as error:
+        raise ValueError(
+            "configuration parameter schema must contain reversal_depth"
+        ) from error
     reversal_parameter = UniformParameter(
         "reversal_depth",
-        11,
+        reversal_index,
         reversal_lower,
         reversal_upper,
     )
@@ -265,7 +271,7 @@ def make_reversal_comparison_configurations(
         parameter_names=configuration.parameter_names,
     )
     no_reversal_base = list(configuration.base_parameters)
-    no_reversal_base[11] = 0.0
+    no_reversal_base[reversal_index] = 0.0
     no_reversal = InferenceConfiguration(
         base_parameters=tuple(no_reversal_base),
         free_parameters=common_parameters,

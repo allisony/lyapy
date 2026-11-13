@@ -289,6 +289,7 @@ def test_posterior_reconstruction_profiles_and_integrated_flux(synthetic_problem
         free_values,
     )
 
+    np.testing.assert_array_equal(reconstruction.model_wavelength, data.wavelength)
     assert reconstruction.intrinsic.shape == (2, data.wavelength.size)
     assert reconstruction.convolved_observed.shape == (2, data.wavelength.size)
     np.testing.assert_allclose(
