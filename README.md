@@ -286,6 +286,21 @@ ISM calculation by roughly a factor of three and the complete GJ 411 forward
 model by roughly 1.5×. The benchmark also records the maximum absorption and
 detector-space differences; timings remain machine-dependent.
 
+Detector integration stores only the high-resolution cells that overlap each
+detector pixel, rather than a mostly-zero dense matrix. The public
+`binning_matrix` diagnostic remains available and is materialized only on
+request. Compare dense and indexed binning—and the rejected FFT-convolution
+alternative—with:
+
+```bash
+python tools/benchmark_instrument_operator.py
+```
+
+For the default GJ 411 grid, indexed binning reduces stored weights by roughly
+178×, accelerates detector integration by roughly 5×, and improves the complete
+forward model by roughly 25%. Direct LSF convolution remains in use because FFT
+convolution is slower for the measured 2,669-cell, 155-kernel-sample problem.
+
 ## Joint fits to multiple spectral lines
 
 `JointSpectrumData` and `JointForwardModel` allow any number of named spectra
