@@ -45,6 +45,7 @@ from .model_catalog import (
     build_gj411_model_catalog,
     make_model_catalog_entry,
 )
+from .lsf import augment_configuration_with_lsf_width
 from .noise import (
     GaussianNoiseModel,
     StudentTNoiseModel,
@@ -102,6 +103,7 @@ __all__ = [
     "load_gj411_composable_problem",
     "make_model_catalog_entry",
     "augment_configuration_with_noise",
+    "augment_configuration_with_lsf_width",
     "evaluate_jax_log_likelihood",
     "evaluate_numpy_log_likelihood",
 ]

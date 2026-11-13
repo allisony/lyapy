@@ -58,7 +58,8 @@ class ComposableBinnedModel:
                 intrinsic.intrinsic * absorption.transmission
             )
         high_resolution_convolved, detector_flux = self.observation_operator.apply(
-            high_resolution_absorbed
+            high_resolution_absorbed,
+            parameters,
         )
         return ComposableForwardResult(
             unconvolved=intrinsic,

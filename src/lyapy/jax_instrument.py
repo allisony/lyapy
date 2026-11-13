@@ -1,6 +1,6 @@
 """Differentiable high-resolution convolution and detector-bin integration."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import jax.numpy as jnp
 import numpy as np
@@ -56,13 +56,37 @@ class HighResolutionObservationOperator:
     detector_edges: np.ndarray
     binning_matrix: np.ndarray
     oversample: int
+    kernel_offsets: np.ndarray
+    lsf_offsets: np.ndarray
+    lsf_profile: np.ndarray
+    model_padding: float
+    ln_lsf_width_scale_index: int | None = None
+    lsf_width_scale_bounds: tuple[float, float] = (1.0, 1.0)
 
-    def apply(self, high_resolution_flux):
+    def effective_lsf_kernel(self, parameters=None):
+        """Return the normalized fixed or parameter-scaled LSF kernel."""
+        if self.ln_lsf_width_scale_index is None:
+            return jnp.asarray(self.convolution_kernel)
+        if parameters is None:
+            raise ValueError("parameters are required for a fitted LSF width")
+        width_scale = jnp.exp(
+            jnp.asarray(parameters)[self.ln_lsf_width_scale_index]
+        )
+        kernel = jnp.interp(
+            jnp.asarray(self.kernel_offsets) / width_scale,
+            jnp.asarray(self.lsf_offsets),
+            jnp.asarray(self.lsf_profile),
+            left=0.0,
+            right=0.0,
+        )
+        return kernel / jnp.sum(kernel)
+
+    def apply(self, high_resolution_flux, parameters=None):
         """Convolve first, then integrate flux density into detector bins."""
         flux = jnp.asarray(high_resolution_flux)
         convolved = jnp.convolve(
             flux,
-            jnp.asarray(self.convolution_kernel),
+            self.effective_lsf_kernel(parameters),
             mode="same",
         )
         detector_flux = jnp.asarray(self.binning_matrix) @ convolved
@@ -76,6 +100,8 @@ def build_high_resolution_operator(
     *,
     oversample=8,
     model_padding=1.0,
+    ln_lsf_width_scale_index=None,
+    lsf_width_scale_bounds=(1.0, 1.0),
 ):
     """Build a flux-conserving operator for a shift-invariant tabulated LSF.
 
@@ -86,6 +112,19 @@ def build_high_resolution_operator(
         raise ValueError("oversample must be a positive integer")
     if model_padding < 0.0:
         raise ValueError("model_padding must be non-negative")
+    if ln_lsf_width_scale_index is not None and ln_lsf_width_scale_index < 0:
+        raise ValueError("ln_lsf_width_scale_index must be non-negative")
+    minimum_width_scale, maximum_width_scale = lsf_width_scale_bounds
+    if (
+        minimum_width_scale <= 0.0
+        or maximum_width_scale < minimum_width_scale
+    ):
+        raise ValueError("LSF width-scale bounds must be positive and ordered")
+    if (
+        ln_lsf_width_scale_index is not None
+        and minimum_width_scale == maximum_width_scale
+    ):
+        raise ValueError("a fitted LSF width requires nonzero-width bounds")
     detector_edges_array = detector_bin_edges(wavelength_centers)
     offsets = np.asarray(lsf_offsets, dtype=np.float64)
     profile = np.asarray(lsf_profile, dtype=np.float64)
@@ -99,7 +138,7 @@ def build_high_resolution_operator(
     detector_spacing = np.median(np.diff(np.asarray(wavelength_centers)))
     target_spacing = detector_spacing / oversample
     lsf_support = max(abs(offsets[0]), abs(offsets[-1]))
-    padding = lsf_support + model_padding
+    padding = maximum_width_scale * lsf_support + model_padding
     lower = detector_edges_array[0] - padding
     upper = detector_edges_array[-1] + padding
     number_of_cells = int(np.ceil((upper - lower) / target_spacing))
@@ -107,7 +146,7 @@ def build_high_resolution_operator(
     wavelength = 0.5 * (high_edges[:-1] + high_edges[1:])
     spacing = high_edges[1] - high_edges[0]
 
-    kernel_radius = int(np.ceil(lsf_support / spacing))
+    kernel_radius = int(np.ceil(maximum_width_scale * lsf_support / spacing))
     kernel_offsets = spacing * np.arange(-kernel_radius, kernel_radius + 1)
     kernel = np.interp(kernel_offsets, offsets, profile, left=0.0, right=0.0)
     kernel = kernel / np.sum(kernel)
@@ -119,4 +158,48 @@ def build_high_resolution_operator(
         detector_edges=detector_edges_array,
         binning_matrix=matrix,
         oversample=oversample,
+        kernel_offsets=kernel_offsets,
+        lsf_offsets=offsets,
+        lsf_profile=profile,
+        model_padding=model_padding,
+        ln_lsf_width_scale_index=ln_lsf_width_scale_index,
+        lsf_width_scale_bounds=(minimum_width_scale, maximum_width_scale),
+    )
+
+
+def parameterize_lsf_width(
+    operator,
+    ln_lsf_width_scale_index,
+    *,
+    width_scale_bounds=(0.8, 1.25),
+):
+    """Copy an operator with a differentiable, flux-conserving LSF width."""
+    if ln_lsf_width_scale_index < 0:
+        raise ValueError("ln_lsf_width_scale_index must be non-negative")
+    minimum_width_scale, maximum_width_scale = width_scale_bounds
+    if minimum_width_scale <= 0.0 or maximum_width_scale <= minimum_width_scale:
+        raise ValueError("width_scale_bounds must be positive and increasing")
+    spacing = float(np.median(np.diff(operator.cell_edges)))
+    support = max(abs(operator.lsf_offsets[0]), abs(operator.lsf_offsets[-1]))
+    extra_support = max(0.0, maximum_width_scale - 1.0) * support
+    if operator.model_padding < extra_support:
+        raise ValueError(
+            "model_padding is too small for the maximum fitted LSF width"
+        )
+    radius = int(np.ceil(maximum_width_scale * support / spacing))
+    kernel_offsets = spacing * np.arange(-radius, radius + 1)
+    kernel = np.interp(
+        kernel_offsets,
+        operator.lsf_offsets,
+        operator.lsf_profile,
+        left=0.0,
+        right=0.0,
+    )
+    kernel /= np.sum(kernel)
+    return replace(
+        operator,
+        convolution_kernel=kernel,
+        kernel_offsets=kernel_offsets,
+        ln_lsf_width_scale_index=ln_lsf_width_scale_index,
+        lsf_width_scale_bounds=(minimum_width_scale, maximum_width_scale),
     )

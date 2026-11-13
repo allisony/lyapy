@@ -195,3 +195,42 @@ The parameter vector in this example is ordered as velocity, log total flux,
 Lorentz FWHM, Gaussian FWHM, reversal velocity, reversal FWHM, peak reversal
 optical depth, log H I column, H I Doppler b, and H I velocity. LSF offsets must
 be wavelength offsets.
+
+### Fitting uncertainty in the STIS LSF width
+
+The tabulated STIS LSF can either remain fixed at its calibrated shape or gain
+one explicit nuisance parameter with
+`augment_configuration_with_lsf_width`. The parameter
+`ln_lsf_width_scale` evaluates the full profile as `LSF(offset / scale)` and
+renormalizes it on the oversampled grid, so convolution continues to conserve
+flux. A scale of one exactly reproduces the fixed operator; the default prior
+allows 0.8--1.25. Because the whole tabulation is scaled, this changes both the
+core width and the locations of existing wings without inventing a separate
+analytic LSF.
+
+```python
+from lyapy.inference.lsf import augment_configuration_with_lsf_width
+
+fitted_configuration, fitted_forward_model = (
+    augment_configuration_with_lsf_width(
+        catalog_entry.configuration,
+        catalog_entry.forward_model,
+        width_scale_bounds=(0.8, 1.25),
+    )
+)
+```
+
+Compare the fixed and fitted-width hypotheses for any curated stellar model:
+
+```bash
+python tools/run_lsf_model_comparison.py \
+  --stellar-model voigt_legacy_reversal \
+  --no-progress
+```
+
+The output plot shows detector-space fits, standardized residuals, and the two
+LSF shapes. The JSON report records the prior, posterior width scale, evidence,
+and sampler settings. The comparison deliberately does not add an LSF-centroid
+parameter: for one spectrum that shift is degenerate with wavelength
+calibration and the stellar/ISM velocity parameters, and should instead be
+handled by an explicitly constrained wavelength-calibration model.
