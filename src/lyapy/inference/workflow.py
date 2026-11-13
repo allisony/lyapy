@@ -830,6 +830,15 @@ class InferenceComparisonResult:
         except KeyError as error:
             raise KeyError(f"unknown model {error.args[0]!r}") from error
 
+    def model_average(self, model_prior_probabilities=None):
+        """Combine posterior products using evidence-based model weights."""
+        from lyapy.inference.averaging import model_average
+
+        return model_average(
+            self,
+            model_prior_probabilities=model_prior_probabilities,
+        )
+
     def plot(
         self,
         spectrum="spectrum",

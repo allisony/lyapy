@@ -333,6 +333,40 @@ remain available for model-specific posterior diagnostics and plots. Evidence
 comparisons require properly normalized likelihoods and scientifically
 defensible priors for every model.
 
+### Averaging across plausible models
+
+Selecting only the highest-evidence model discards uncertainty about the model
+itself. A completed comparison can instead combine latent detector predictions and
+intrinsic integrated fluxes using Bayesian model probabilities:
+
+```python
+averaged = comparison.model_average()
+print(averaged.model_probabilities)
+print(averaged.integrated_flux_summary())
+averaged.plot().savefig("model_averaged_spectrum.png", dpi=180)
+```
+
+The default assigns equal prior probability to each candidate model. If there
+is an independently justified reason to prefer some hypotheses before seeing
+these data, provide every model explicitly:
+
+```python
+averaged = comparison.model_average(
+    {
+        "single Gaussian": 0.25,
+        "single Voigt": 0.50,
+        "self-reversed Voigt": 0.25,
+    }
+)
+```
+
+These model-level probabilities are distinct from the parameter priors already
+included in each evidence. `averaged.probability_summary()` propagates the
+reported nested-sampling evidence errors with an independent-normal
+approximation; the central model average itself uses the reported evidence
+estimates. Parameters are not averaged by name because different hypotheses
+can assign different physical meanings to their parameter vectors.
+
 ## Composable high-resolution forward model
 
 Optional JAX components support single or multiple Gaussian and Voigt emission

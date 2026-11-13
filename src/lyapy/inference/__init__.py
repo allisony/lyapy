@@ -91,6 +91,12 @@ from .workflow import (
     load_inference_result,
     run_inference,
 )
+from .averaging import (
+    ModelAveragedResult,
+    model_average,
+    plot_model_average,
+    posterior_model_probabilities,
+)
 from .prior import (
     PriorBoundaryDiagnostic,
     PriorPredictiveResult,
@@ -129,6 +135,7 @@ __all__ = [
     "JointLikelihood",
     "JointSpectrumData",
     "ModelComparison",
+    "ModelAveragedResult",
     "ModelCatalogEntry",
     "ModelEvidenceRun",
     "ModelHypothesis",
@@ -178,6 +185,9 @@ __all__ = [
     "load_inference_result",
     "load_prior_sensitivity",
     "make_model_catalog_entry",
+    "model_average",
+    "plot_model_average",
+    "posterior_model_probabilities",
     "plot_prior_predictive",
     "plot_prior_sensitivity",
     "run_prior_sensitivity",
