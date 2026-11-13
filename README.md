@@ -35,6 +35,7 @@ python tools/run_inference_smoke_test.py
 python tools/run_stellar_recovery.py
 python tools/run_full_recovery.py
 python tools/run_gj411_inference.py
+python tools/run_gj411_model_comparison.py
 ```
 
 The smoke test varies two parameters. The recovery scripts then validate five
@@ -44,3 +45,43 @@ spectrum and writes posterior, fitted-spectrum, reconstruction, reusable NPZ,
 and JSON diagnostic products. The reconstruction includes 68% and 95% profile
 bands and the integrated intrinsic Ly-alpha flux posterior. These runs keep
 D/H, the inactive second absorber, and the tabulated STIS LSF fixed.
+The final model-comparison command measures whether the observed spectrum
+supports a self-reversed intrinsic profile relative to a zero-reversal model.
+Its documented default prior on reversal depth is uniform from 0 to 1.8; use
+`--reversal-max` for an explicit prior-sensitivity run.
+
+### Comparing arbitrary models
+
+The evidence framework accepts two or more named inference configurations and
+runs them with matched nested-sampling settings:
+
+```python
+from lyapy.inference import ModelHypothesis, run_evidence_comparison
+
+result = run_evidence_comparison(
+    data,
+    (
+        ModelHypothesis("model A", configuration_a),
+        ModelHypothesis("model B", configuration_b),
+        ModelHypothesis("model C", configuration_c),
+    ),
+    random_seed=93,
+    nlive=500,
+    dlogz=0.05,
+    sample="rwalk",
+    bootstrap=0,
+)
+
+print(result.best_model)
+print(result.as_dict()["ranking"])
+sampler = result.get_run("model A").sampler
+```
+
+Each hypothesis may supply a different JAX forward model, likelihood function,
+ordered parameter schema, fixed parameter vector, free parameters, and priors.
+Each report records those
+callables and parameter definitions alongside evidence uncertainties, runtimes,
+and Bayes factors relative to the highest-evidence model. The retained samplers
+remain available for model-specific posterior diagnostics and plots. Evidence
+comparisons require properly normalized likelihoods and scientifically
+defensible priors for every model.

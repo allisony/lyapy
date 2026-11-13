@@ -4,7 +4,6 @@ import argparse
 import json
 from pathlib import Path
 import sys
-from time import perf_counter
 
 try:
     import dynesty  # noqa: F401 -- fail early with an actionable message
@@ -26,28 +25,14 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
-from lyapy.inference.common import InferenceConfiguration
-from lyapy.inference.comparison import EvidenceEstimate, compare_evidence
+from lyapy.inference.common import make_reversal_comparison_configurations
+from lyapy.inference.comparison import (
+    ModelHypothesis,
+    compare_evidence,
+    run_evidence_comparison,
+)
 from lyapy.inference.diagnostics import summarize_dynesty
-from lyapy.inference.dynesty_backend import run_dynesty
 from run_inference_validation import make_synthetic_problem, predict
-
-
-def make_configurations(reversal_configuration):
-    """Return matched self-reversed and non-reversed hypotheses."""
-    amplitude = reversal_configuration.free_parameters[0]
-    reversal = reversal_configuration.free_parameters[1]
-    self_reversed = InferenceConfiguration(
-        base_parameters=reversal_configuration.base_parameters,
-        free_parameters=(amplitude, reversal),
-    )
-    no_reversal_base = list(reversal_configuration.base_parameters)
-    no_reversal_base[11] = 0.0
-    no_reversal = InferenceConfiguration(
-        base_parameters=tuple(no_reversal_base),
-        free_parameters=(amplitude,),
-    )
-    return self_reversed, no_reversal
 
 
 def posterior_mean(sampler):
@@ -64,6 +49,8 @@ def make_plot(
     reversal_sampler,
     no_reversal_sampler,
     comparison,
+    data_label="synthetic data",
+    title_prefix="Self-reversal comparison",
 ):
     """Plot the two posterior-mean curves and their normalized residuals."""
     reversal_model = predict(
@@ -89,7 +76,7 @@ def make_plot(
         yerr=data.error * 1e12,
         color="0.65",
         linewidth=0.8,
-        label="synthetic data",
+        label=data_label,
     )
     profile_axis.plot(
         data.wavelength,
@@ -128,7 +115,7 @@ def make_plot(
     residual_axis.set_ylabel("residual / error")
     residual_axis.grid(alpha=0.2)
     figure.suptitle(
-        f"Self-reversal comparison: Δlog Z = "
+        f"{title_prefix}: Δlog Z = "
         f"{comparison.delta_log_evidence:.1f} ± "
         f"{comparison.delta_log_evidence_error:.1f}"
     )
@@ -159,40 +146,33 @@ def main():
     arguments = parse_arguments()
     report_path = arguments.report or arguments.output.with_suffix(".json")
     data, original_configuration, truth = make_synthetic_problem(arguments.seed)
-    reversal_configuration, no_reversal_configuration = make_configurations(
-        original_configuration
+    reversal_configuration, no_reversal_configuration = (
+        make_reversal_comparison_configurations(
+            original_configuration,
+            reversal_lower=1.0,
+            reversal_upper=1.9,
+        )
     )
 
-    start = perf_counter()
-    reversal_sampler = run_dynesty(
+    selection = run_evidence_comparison(
         data,
-        reversal_configuration,
+        (
+            ModelHypothesis("self reversal", reversal_configuration),
+            ModelHypothesis("no reversal", no_reversal_configuration),
+        ),
+        random_seed=arguments.seed,
         nlive=arguments.nlive,
         dlogz=arguments.dlogz,
-        random_state=np.random.default_rng(arguments.seed),
         print_progress=not arguments.no_progress,
     )
-    reversal_seconds = perf_counter() - start
-    start = perf_counter()
-    no_reversal_sampler = run_dynesty(
-        data,
-        no_reversal_configuration,
-        nlive=arguments.nlive,
-        dlogz=arguments.dlogz,
-        random_state=np.random.default_rng(arguments.seed + 1),
-        print_progress=not arguments.no_progress,
+    reversal_run = selection.get_run("self reversal")
+    no_reversal_run = selection.get_run("no reversal")
+    reversal_sampler = reversal_run.sampler
+    no_reversal_sampler = no_reversal_run.sampler
+    comparison = compare_evidence(
+        reversal_run.evidence,
+        no_reversal_run.evidence,
     )
-    no_reversal_seconds = perf_counter() - start
-
-    reversal_evidence = EvidenceEstimate.from_dynesty(
-        "self reversal",
-        reversal_sampler,
-    )
-    no_reversal_evidence = EvidenceEstimate.from_dynesty(
-        "no reversal",
-        no_reversal_sampler,
-    )
-    comparison = compare_evidence(reversal_evidence, no_reversal_evidence)
     reversal_summary = summarize_dynesty(
         reversal_sampler,
         ("log_amplitude", "reversal_depth"),
@@ -212,9 +192,10 @@ def main():
             "stopping_log_evidence": arguments.dlogz,
         },
         "runtime_seconds": {
-            "self_reversal": reversal_seconds,
-            "no_reversal": no_reversal_seconds,
+            "self_reversal": reversal_run.runtime_seconds,
+            "no_reversal": no_reversal_run.runtime_seconds,
         },
+        "model_selection": selection.as_dict(),
         "comparison": comparison.as_dict(),
         "self_reversal": reversal_summary,
         "no_reversal": no_reversal_summary,
@@ -235,8 +216,8 @@ def main():
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     print(json.dumps(report["comparison"], indent=2))
-    print(f"Self-reversal runtime: {reversal_seconds:.2f} s")
-    print(f"No-reversal runtime:   {no_reversal_seconds:.2f} s")
+    print(f"Self-reversal runtime: {reversal_run.runtime_seconds:.2f} s")
+    print(f"No-reversal runtime:   {no_reversal_run.runtime_seconds:.2f} s")
     print(f"Wrote {arguments.output.resolve()}")
     print(f"Wrote {report_path.resolve()}")
 
