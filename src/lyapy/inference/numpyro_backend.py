@@ -9,6 +9,8 @@ from numpyro.infer import MCMC, NUTS, init_to_value
 
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
 from lyapy.inference.common import TruncatedNormalParameter, UniformParameter
+from lyapy.inference.noise import evaluate_jax_log_likelihood
+from lyapy.likelihoods import gaussian_log_likelihood
 
 
 def _prior_distribution(parameter):
@@ -28,6 +30,7 @@ def numpyro_spectrum_model(
     data,
     configuration,
     forward_model=evaluate_voigt_lya_model_jax,
+    likelihood_function=gaussian_log_likelihood,
 ):
     """NumPyro model using a shared configuration and forward model."""
     free_values = []
@@ -45,10 +48,15 @@ def numpyro_spectrum_model(
         jnp.asarray(data.convolution_kernel),
     ).convolved.observed
     numpyro.deterministic("model_flux", prediction)
-    numpyro.sample(
-        "observed_flux",
-        dist.Normal(prediction, jnp.asarray(data.error)),
-        obs=jnp.asarray(data.flux),
+    numpyro.factor(
+        "observed_flux_log_likelihood",
+        evaluate_jax_log_likelihood(
+            likelihood_function,
+            jnp.asarray(data.flux),
+            prediction,
+            jnp.asarray(data.error),
+            full_parameters,
+        ),
     )
 
 
@@ -64,6 +72,7 @@ def run_nuts(
     chain_method="parallel",
     dense_mass=False,
     forward_model=evaluate_voigt_lya_model_jax,
+    likelihood_function=gaussian_log_likelihood,
 ):
     """Run NUTS initialized at the configuration's baseline values.
 
@@ -74,7 +83,11 @@ def run_nuts(
         parameter.name: configuration.base_parameters[parameter.index]
         for parameter in configuration.free_parameters
     }
-    model = partial(numpyro_spectrum_model, forward_model=forward_model)
+    model = partial(
+        numpyro_spectrum_model,
+        forward_model=forward_model,
+        likelihood_function=likelihood_function,
+    )
     kernel = NUTS(
         model,
         init_strategy=init_to_value(values=initial_values),

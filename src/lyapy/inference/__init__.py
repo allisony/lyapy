@@ -45,6 +45,13 @@ from .model_catalog import (
     build_gj411_model_catalog,
     make_model_catalog_entry,
 )
+from .noise import (
+    GaussianNoiseModel,
+    StudentTNoiseModel,
+    augment_configuration_with_noise,
+    evaluate_jax_log_likelihood,
+    evaluate_numpy_log_likelihood,
+)
 from .reconstruction import (
     DEFAULT_PERCENTILE_PROBABILITIES,
     ReconstructionSamples,
@@ -57,6 +64,7 @@ __all__ = [
     "GJ411_CONFIGURATION",
     "GJ411_COMPOSABLE_CONFIGURATION",
     "GJ411_STELLAR_CONFIGURATION",
+    "GaussianNoiseModel",
     "COMPOSABLE_GJ411_BASE_PARAMETERS",
     "COMPOSABLE_GJ411_PARAMETER_NAMES",
     "DEFAULT_PERCENTILE_PROBABILITIES",
@@ -72,6 +80,7 @@ __all__ = [
     "ModelSelectionResult",
     "ReconstructionSamples",
     "SpectrumData",
+    "StudentTNoiseModel",
     "TruncatedNormalParameter",
     "UniformParameter",
     "summarize_dynesty",
@@ -92,4 +101,7 @@ __all__ = [
     "build_gj411_model_catalog",
     "load_gj411_composable_problem",
     "make_model_catalog_entry",
+    "augment_configuration_with_noise",
+    "evaluate_jax_log_likelihood",
+    "evaluate_numpy_log_likelihood",
 ]
