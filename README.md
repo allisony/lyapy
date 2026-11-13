@@ -39,6 +39,7 @@ python tools/run_gj411_model_comparison.py
 python tools/run_composable_model_comparison.py
 python tools/run_catalog_model_comparison.py --list-models
 python tools/run_catalog_model_comparison.py --models single_gaussian single_voigt
+python tools/run_noise_model_comparison.py
 ```
 
 The smoke test varies two parameters. The recovery scripts then validate five
@@ -75,6 +76,21 @@ switching. Each catalog entry records its components, complete parameter
 schema, prior types, and bounds. User-defined emission or absorption objects
 can be registered with `make_model_catalog_entry` as long as they implement the
 same small component interfaces used by the standard models.
+
+### Uncertainty and robust-likelihood models
+
+Reported spectral uncertainties can be used unchanged, multiplied by an
+inferred global scale, or combined in quadrature with an inferred additive
+jitter floor. A Student-t likelihood provides a separate robust option for
+isolated outliers. These are deliberately distinct hypotheses: a global scale
+addresses broadly underestimated errors, jitter primarily protects bins with
+very small formal errors, and Student-t tails reduce the leverage of a few
+discordant bins.
+
+`run_noise_model_comparison.py` compares all four treatments for any stellar
+model in the catalog. Noise parameters and their priors are included in the
+evidence calculation and serialized report; Lyapy does not silently replace or
+clip the supplied HST uncertainties.
 
 ### Comparing arbitrary models
 

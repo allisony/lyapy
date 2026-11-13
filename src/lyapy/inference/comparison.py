@@ -82,7 +82,7 @@ class ModelHypothesis:
             specification = asdict(parameter)
             specification["prior"] = type(parameter).__name__
             parameters.append(specification)
-        return {
+        result = {
             "name": self.name,
             "forward_model": _callable_name(self.forward_model),
             "likelihood_function": _callable_name(self.likelihood_function),
@@ -90,6 +90,11 @@ class ModelHypothesis:
             "base_parameters": list(self.configuration.base_parameters),
             "free_parameters": parameters,
         }
+        if hasattr(self.likelihood_function, "as_dict"):
+            result["likelihood_specification"] = (
+                self.likelihood_function.as_dict()
+            )
+        return result
 
 
 @dataclass(frozen=True)

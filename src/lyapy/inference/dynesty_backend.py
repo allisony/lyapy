@@ -6,6 +6,7 @@ import numpy as np
 
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
 from lyapy.likelihoods import gaussian_log_likelihood
+from lyapy.inference.noise import evaluate_numpy_log_likelihood
 
 
 def build_dynesty_functions(
@@ -29,7 +30,14 @@ def build_dynesty_functions(
 
     def log_likelihood(free_values):
         model_flux = np.asarray(predict(jnp.asarray(free_values)))
-        return likelihood_function(observed, model_flux, error)
+        full_parameters = configuration.assemble_numpy(free_values)
+        return evaluate_numpy_log_likelihood(
+            likelihood_function,
+            observed,
+            model_flux,
+            error,
+            full_parameters,
+        )
 
     return log_likelihood, configuration.transform_unit_cube
 
