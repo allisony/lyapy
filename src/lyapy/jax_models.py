@@ -63,6 +63,9 @@ _HUMLICEK_BB = np.array(
 _LEGACY_U_VALUES = np.asarray(legacy_voigt.uvals)
 _LEGACY_H1 = np.asarray(legacy_voigt.H1)
 _LEGACY_H3 = np.asarray(legacy_voigt.H3)
+_LEGACY_U_STEP = float(_LEGACY_U_VALUES[1] - _LEGACY_U_VALUES[0])
+_LEGACY_U_MAXIMUM = float(_LEGACY_U_VALUES[-1])
+_LEGACY_U_LAST_INDEX = len(_LEGACY_U_VALUES) - 1
 
 
 class JaxLyaModelComponents(NamedTuple):
@@ -167,6 +170,24 @@ def normalized_voigt_profile_jax(
     )
 
 
+def _interpolate_harris_tables(u):
+    """Interpolate both Harris tables on their shared uniform grid."""
+    clipped = jnp.minimum(u, _LEGACY_U_MAXIMUM)
+    position = clipped / _LEGACY_U_STEP
+    lower_index = jnp.floor(position).astype(jnp.int32)
+    upper_index = jnp.minimum(lower_index + 1, _LEGACY_U_LAST_INDEX)
+    fraction = position - lower_index
+    h1 = jnp.asarray(_LEGACY_H1)
+    h3 = jnp.asarray(_LEGACY_H3)
+    table_h1 = h1[lower_index] + fraction * (
+        h1[upper_index] - h1[lower_index]
+    )
+    table_h3 = h3[lower_index] + fraction * (
+        h3[upper_index] - h3[lower_index]
+    )
+    return table_h1, table_h3
+
+
 def _harris_voigt(a_parameter, u_parameter):
     """JAX port of the Harris expansion used by the legacy absorption model."""
     u = jnp.abs(u_parameter)
@@ -183,8 +204,7 @@ def _harris_voigt(a_parameter, u_parameter):
     )
 
     exponential = jnp.exp(-u_squared)
-    table_h1 = jnp.interp(u, jnp.asarray(_LEGACY_U_VALUES), jnp.asarray(_LEGACY_H1))
-    table_h3 = jnp.interp(u, jnp.asarray(_LEGACY_U_VALUES), jnp.asarray(_LEGACY_H3))
+    table_h1, table_h3 = _interpolate_harris_tables(u)
     table = exponential + a_parameter * (
         table_h1
         + a_parameter

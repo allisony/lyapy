@@ -270,6 +270,22 @@ python tools/benchmark_posterior_products.py
 The generated JSON records both throughputs, speedup, and maximum numerical
 difference; timings are hardware- and JAX-backend-dependent.
 
+The H I and D I Voigt calculation uses direct linear interpolation indices for
+the legacy Harris coefficient tables. Those tables share an exactly uniform
+0.01 grid, so direct indexing is mathematically the same interpolation as a
+general binary search while avoiding four searches per forward-model call.
+Benchmark the retained binary-search reference against the optimized model
+with:
+
+```bash
+python tools/benchmark_ism_absorption.py
+```
+
+On the development CPU at 8× oversampling, direct indexing reduced the isolated
+ISM calculation by roughly a factor of three and the complete GJ 411 forward
+model by roughly 1.5×. The benchmark also records the maximum absorption and
+detector-space differences; timings remain machine-dependent.
+
 ## Joint fits to multiple spectral lines
 
 `JointSpectrumData` and `JointForwardModel` allow any number of named spectra
