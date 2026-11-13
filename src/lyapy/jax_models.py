@@ -210,6 +210,7 @@ def _line_optical_depth(
     rest_wavelength,
     oscillator_strength,
     damping_rate,
+    maximum_wavelength_offset,
 ):
     column_density = 10.0**log_column
     frequency_center = CGS_SPEED_OF_LIGHT / (rest_wavelength * 1.0e-8)
@@ -226,12 +227,84 @@ def _line_optical_depth(
     shifted_center = (
         rest_wavelength + rest_wavelength * velocity / KM_SPEED_OF_LIGHT
     )
-    wavelength_offset = jnp.minimum(jnp.abs(wavelength - shifted_center), 2.0)
+    wavelength_offset = jnp.abs(wavelength - shifted_center)
+    if maximum_wavelength_offset is not None:
+        wavelength_offset = jnp.minimum(
+            wavelength_offset,
+            maximum_wavelength_offset,
+        )
     symmetric_blue_wavelength = rest_wavelength - wavelength_offset
     frequency = CGS_SPEED_OF_LIGHT / (symmetric_blue_wavelength * 1.0e-8)
     u_parameter = (frequency - frequency_center) / doppler_frequency
     cross_section = cross_section_center * _harris_voigt(a_parameter, u_parameter)
     return cross_section * column_density
+
+
+def line_optical_depth_jax(
+    wavelength,
+    log_column,
+    velocity,
+    doppler_b,
+    rest_wavelength,
+    oscillator_strength,
+    damping_rate,
+):
+    """Evaluate an untruncated differentiable absorption-line optical depth.
+
+    Unlike the compatibility model below, this function evaluates the Voigt
+    damping wings at every supplied wavelength instead of freezing the profile
+    at a fixed distance from line center.
+    """
+    _require_x64()
+    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
+    column_density = 10.0**log_column
+    frequency_center = CGS_SPEED_OF_LIGHT / (rest_wavelength * 1.0e-8)
+    doppler_frequency = frequency_center * doppler_b / KM_SPEED_OF_LIGHT
+    a_parameter = jnp.abs(damping_rate / (4.0 * jnp.pi * doppler_frequency))
+    cross_section_center = (
+        jnp.sqrt(jnp.pi)
+        * ELECTRON_CHARGE_ESU**2
+        * oscillator_strength
+        * rest_wavelength
+        / (ELECTRON_MASS_G * CGS_SPEED_OF_LIGHT * doppler_b * 1.0e13)
+    )
+    rest_frame_frequency = (
+        CGS_SPEED_OF_LIGHT
+        / (wavelength * 1.0e-8)
+        * (1.0 + velocity / KM_SPEED_OF_LIGHT)
+    )
+    u_parameter = (rest_frame_frequency - frequency_center) / doppler_frequency
+    cross_section = cross_section_center * _harris_voigt(a_parameter, u_parameter)
+    return cross_section * column_density
+
+
+def hydrogen_deuterium_transmission_jax(
+    wavelength,
+    log_h1_column,
+    h1_doppler_b,
+    h1_velocity,
+    deuterium_to_hydrogen=1.5e-5,
+):
+    """Return untruncated H I plus D I transmission on ``wavelength``."""
+    hydrogen_tau = line_optical_depth_jax(
+        wavelength,
+        log_h1_column,
+        h1_velocity,
+        h1_doppler_b,
+        1215.67,
+        0.4161,
+        6.26e8,
+    )
+    deuterium_tau = line_optical_depth_jax(
+        wavelength,
+        log_h1_column + jnp.log10(deuterium_to_hydrogen),
+        h1_velocity,
+        h1_doppler_b / jnp.sqrt(2.0),
+        1215.3394,
+        0.4161,
+        6.27e8,
+    )
+    return jnp.exp(-(hydrogen_tau + deuterium_tau))
 
 
 def _hydrogen_deuterium_transmission(
@@ -245,6 +318,7 @@ def _hydrogen_deuterium_transmission(
         1215.67,
         0.4161,
         6.26e8,
+        maximum_wavelength_offset=2.0,
     )
     deuterium_tau = _line_optical_depth(
         wavelength,
@@ -254,6 +328,7 @@ def _hydrogen_deuterium_transmission(
         1215.3394,
         0.4161,
         6.27e8,
+        maximum_wavelength_offset=2.0,
     )
     return jnp.exp(-(hydrogen_tau + deuterium_tau))
 
