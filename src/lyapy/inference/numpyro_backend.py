@@ -10,6 +10,10 @@ from numpyro.infer import MCMC, NUTS, init_to_value
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
 from lyapy.inference.common import TruncatedNormalParameter, UniformParameter
 from lyapy.inference.noise import evaluate_jax_log_likelihood
+from lyapy.inference.joint import (
+    JointSpectrumData,
+    evaluate_joint_jax_log_likelihoods,
+)
 from lyapy.likelihoods import gaussian_log_likelihood
 
 
@@ -42,6 +46,28 @@ def numpyro_spectrum_model(
             )
         )
     full_parameters = configuration.assemble_jax(jnp.stack(free_values))
+    if isinstance(data, JointSpectrumData):
+        predictions = forward_model.predict(data, full_parameters)
+        contributions = evaluate_joint_jax_log_likelihoods(
+            likelihood_function,
+            data,
+            predictions,
+            full_parameters,
+        )
+        for spectrum, prediction, contribution in zip(
+            data.spectra,
+            predictions,
+            contributions,
+        ):
+            numpyro.deterministic(
+                f"model_flux_{spectrum.site_name}",
+                prediction,
+            )
+            numpyro.factor(
+                f"observed_flux_log_likelihood_{spectrum.site_name}",
+                contribution,
+            )
+        return
     prediction = forward_model(
         jnp.asarray(data.wavelength),
         full_parameters,

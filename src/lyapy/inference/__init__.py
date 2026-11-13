@@ -46,6 +46,16 @@ from .model_catalog import (
     make_model_catalog_entry,
 )
 from .lsf import augment_configuration_with_lsf_width
+from .joint import (
+    JointForwardModel,
+    JointLikelihood,
+    JointSpectrumData,
+    NamedForwardModel,
+    NamedLikelihood,
+    NamedSpectrumData,
+    evaluate_joint_jax_log_likelihoods,
+    evaluate_joint_numpy_log_likelihoods,
+)
 from .noise import (
     GaussianNoiseModel,
     StudentTNoiseModel,
@@ -74,11 +84,17 @@ __all__ = [
     "InferenceConfiguration",
     "ComposableInferenceProblem",
     "IdentifiabilityResult",
+    "JointForwardModel",
+    "JointLikelihood",
+    "JointSpectrumData",
     "ModelComparison",
     "ModelCatalogEntry",
     "ModelEvidenceRun",
     "ModelHypothesis",
     "ModelSelectionResult",
+    "NamedForwardModel",
+    "NamedLikelihood",
+    "NamedSpectrumData",
     "ReconstructionSamples",
     "SpectrumData",
     "StudentTNoiseModel",
@@ -106,4 +122,6 @@ __all__ = [
     "augment_configuration_with_lsf_width",
     "evaluate_jax_log_likelihood",
     "evaluate_numpy_log_likelihood",
+    "evaluate_joint_jax_log_likelihoods",
+    "evaluate_joint_numpy_log_likelihoods",
 ]
