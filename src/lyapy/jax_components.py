@@ -5,7 +5,11 @@ from typing import NamedTuple
 
 import jax.numpy as jnp
 
-from lyapy.jax_models import KM_SPEED_OF_LIGHT, normalized_voigt_profile_jax
+from lyapy.jax_models import (
+    KM_SPEED_OF_LIGHT,
+    hydrogen_deuterium_transmission_jax,
+    normalized_voigt_profile_jax,
+)
 
 
 class IntrinsicSpectrumResult(NamedTuple):
@@ -18,6 +22,13 @@ class IntrinsicSpectrumResult(NamedTuple):
     unreversed_shape: object
     reversal_transmission: object
     normalization_integral: object
+
+
+class AbsorptionSpectrumResult(NamedTuple):
+    """Combined and per-component ISM transmission on one wavelength grid."""
+
+    transmission: object
+    component_transmissions: object
 
 
 def _validate_index(index, name):
@@ -167,6 +178,71 @@ class LegacyIntensityReversal:
         del wavelength
         return jnp.exp(
             -parameters[self.depth_index] * emission / jnp.max(emission)
+        )
+
+
+@dataclass(frozen=True)
+class HydrogenDeuteriumAbsorber:
+    """One untruncated H I plus D I interstellar absorption component."""
+
+    log_h1_column_index: int
+    h1_doppler_b_index: int
+    h1_velocity_index: int
+    deuterium_to_hydrogen_index: int | None = None
+    fixed_deuterium_to_hydrogen: float = 1.5e-5
+
+    def __post_init__(self):
+        for index, name in (
+            (self.log_h1_column_index, "log_h1_column_index"),
+            (self.h1_doppler_b_index, "h1_doppler_b_index"),
+            (self.h1_velocity_index, "h1_velocity_index"),
+            (self.deuterium_to_hydrogen_index, "deuterium_to_hydrogen_index"),
+        ):
+            _validate_index(index, name)
+        if self.fixed_deuterium_to_hydrogen <= 0.0:
+            raise ValueError("fixed_deuterium_to_hydrogen must be positive")
+
+    def transmission(self, wavelength, parameters):
+        if self.deuterium_to_hydrogen_index is None:
+            deuterium_to_hydrogen = self.fixed_deuterium_to_hydrogen
+        else:
+            deuterium_to_hydrogen = parameters[
+                self.deuterium_to_hydrogen_index
+            ]
+        return hydrogen_deuterium_transmission_jax(
+            wavelength,
+            parameters[self.log_h1_column_index],
+            parameters[self.h1_doppler_b_index],
+            parameters[self.h1_velocity_index],
+            deuterium_to_hydrogen,
+        )
+
+
+@dataclass(frozen=True)
+class CompositeAbsorptionModel:
+    """Multiply one or more duck-typed ISM transmission components."""
+
+    components: tuple
+
+    def __post_init__(self):
+        if not self.components:
+            raise ValueError("at least one absorption component is required")
+        for component in self.components:
+            if not hasattr(component, "transmission"):
+                raise TypeError("absorption components must define transmission")
+
+    def evaluate(self, wavelength, parameters):
+        wavelength = jnp.asarray(wavelength)
+        parameters = jnp.asarray(parameters)
+        component_transmissions = jnp.stack(
+            [
+                component.transmission(wavelength, parameters)
+                for component in self.components
+            ]
+        )
+        return AbsorptionSpectrumResult(
+            transmission=jnp.prod(component_transmissions, axis=0),
+            component_transmissions=component_transmissions,
         )
 
 

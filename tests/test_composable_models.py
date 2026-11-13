@@ -13,9 +13,11 @@ from lyapy.inference.common import (
 )
 from lyapy.inference.dynesty_backend import build_dynesty_functions
 from lyapy.jax_components import (
+    CompositeAbsorptionModel,
     CompositeEmissionModel,
     GaussianEmissionComponent,
     GaussianOpticalDepthReversal,
+    HydrogenDeuteriumAbsorber,
     VoigtEmissionComponent,
 )
 from lyapy.jax_composable import ComposableBinnedModel
@@ -23,6 +25,7 @@ from lyapy.jax_instrument import (
     build_high_resolution_operator,
     detector_bin_edges,
 )
+from lyapy.jax_models import line_optical_depth_jax
 
 
 def gaussian_lsf():
@@ -98,6 +101,116 @@ def test_reversal_changes_shape_without_changing_total_flux():
         1e-11,
         rtol=2e-13,
     )
+
+
+def test_ism_voigt_wings_continue_decreasing_beyond_two_angstroms():
+    wavelength = 1215.67 + jnp.array([1.0, 2.0, 3.0, 5.0])
+    optical_depth = np.asarray(
+        line_optical_depth_jax(
+            wavelength,
+            log_column=18.9,
+            velocity=0.0,
+            doppler_b=12.0,
+            rest_wavelength=1215.67,
+            oscillator_strength=0.4161,
+            damping_rate=6.26e8,
+        )
+    )
+
+    assert np.all(np.diff(optical_depth) < 0.0)
+    assert 1.0 - np.exp(-optical_depth[2]) > 0.01
+    assert not np.isclose(optical_depth[2], optical_depth[1])
+
+
+def make_binned_absorption_model(oversample):
+    centers = np.linspace(1214.5, 1216.5, 101)
+    offsets, lsf = gaussian_lsf()
+    operator = build_high_resolution_operator(
+        centers,
+        offsets,
+        lsf,
+        oversample=oversample,
+        model_padding=0.5,
+    )
+    emission = CompositeEmissionModel(
+        components=(GaussianEmissionComponent(1215.67, 0, 2),),
+        log_total_flux_index=1,
+    )
+    absorption = CompositeAbsorptionModel(
+        components=(HydrogenDeuteriumAbsorber(3, 4, 5),),
+    )
+    return centers, ComposableBinnedModel(
+        emission,
+        operator,
+        absorption_model=absorption,
+    )
+
+
+def test_composable_ism_absorption_is_applied_before_instrument_response():
+    centers, model = make_binned_absorption_model(16)
+    parameters = jnp.array([0.0, -11.0, 140.0, 18.9, 12.0, 3.0])
+    result = model(centers, parameters, np.array([1.0]))
+
+    assert result.absorption is not None
+    assert result.absorption.component_transmissions.shape[0] == 1
+    assert np.min(result.absorption.transmission) == 0.0
+    np.testing.assert_allclose(
+        result.high_resolution_absorbed,
+        result.unconvolved.intrinsic * result.absorption.transmission,
+    )
+    assert np.max(result.convolved.observed) < np.max(result.unconvolved.intrinsic)
+
+
+def test_multiple_ism_components_multiply_their_transmissions():
+    wavelength = jnp.linspace(1214.5, 1216.5, 2001)
+    parameters = jnp.array([18.0, 12.0, -8.0, 17.6, 10.0, 11.0])
+    first = HydrogenDeuteriumAbsorber(0, 1, 2)
+    second = HydrogenDeuteriumAbsorber(3, 4, 5)
+    model = CompositeAbsorptionModel((first, second))
+
+    result = model.evaluate(wavelength, parameters)
+
+    np.testing.assert_allclose(
+        result.transmission,
+        first.transmission(wavelength, parameters)
+        * second.transmission(wavelength, parameters),
+    )
+    assert result.component_transmissions.shape == (2, wavelength.size)
+
+
+def test_ism_detector_prediction_converges_with_oversampling():
+    parameters = jnp.array([0.0, -11.0, 140.0, 18.9, 8.6, 3.0])
+    predictions = []
+    for oversample in (4, 8, 16, 32):
+        centers, model = make_binned_absorption_model(oversample)
+        predictions.append(
+            np.asarray(
+                model(centers, parameters, np.array([1.0])).convolved.observed
+            )
+        )
+
+    reference = predictions[-1]
+    scale = np.max(reference)
+    error_4 = np.max(np.abs(predictions[0] - reference)) / scale
+    error_8 = np.max(np.abs(predictions[1] - reference)) / scale
+    error_16 = np.max(np.abs(predictions[2] - reference)) / scale
+
+    assert error_16 < error_8 < error_4
+    assert error_8 < 2e-3
+
+
+def test_composable_ism_model_is_differentiable():
+    centers, model = make_binned_absorption_model(8)
+    parameters = jnp.array([0.0, -11.0, 140.0, 18.2, 12.0, 3.0])
+    gradient = jax.grad(
+        lambda values: jnp.sum(
+            model(centers, values, np.array([1.0])).convolved.observed
+        )
+        / 1e-11
+    )(parameters)
+
+    assert np.all(np.isfinite(gradient))
+    assert np.all(np.abs(gradient[3:]) > 0.0)
 
 
 def test_detector_edges_and_operator_preserve_constant_flux_density():
