@@ -30,6 +30,7 @@ from lyapy.inference.joint import (
 )
 from lyapy.inference.noise import GaussianNoiseModel, StudentTNoiseModel
 from lyapy.inference.numpyro_backend import numpyro_spectrum_model, run_nuts
+from lyapy.inference.workflow import InferenceProblem, InferenceResult
 from lyapy.likelihoods import gaussian_log_likelihood
 
 
@@ -238,3 +239,73 @@ def test_joint_names_must_match_and_have_unique_sample_sites():
                 NamedSpectrumData("Si-III", data.spectra[1].data),
             )
         )
+
+
+def test_joint_result_diagnostics_use_each_spectrums_noise_model():
+    data, configuration, forward_model = make_joint_problem()
+    likelihood = JointLikelihood(
+        (
+            NamedLikelihood(
+                "Ly alpha",
+                GaussianNoiseModel(fixed_error_scale=2.0),
+            ),
+            NamedLikelihood(
+                "Si III",
+                StudentTNoiseModel(
+                    fixed_error_scale=3.0,
+                    degrees_of_freedom=4.0,
+                ),
+            ),
+        )
+    )
+    problem = InferenceProblem(
+        data,
+        configuration,
+        forward_model,
+        likelihood_function=likelihood,
+        name="joint noise diagnostics",
+    )
+    samples = np.repeat(
+        np.asarray(configuration.base_parameters)[None, :],
+        3,
+        axis=0,
+    )
+    model_predictions = forward_model.predict(
+        data,
+        jnp.asarray(configuration.base_parameters),
+    )
+    result = InferenceResult(
+        name=problem.name,
+        backend="nuts",
+        parameter_names=tuple(
+            parameter.name for parameter in configuration.free_parameters
+        ),
+        samples=samples,
+        weights=None,
+        diagnostics={},
+        problem_specification=problem.as_dict(),
+        observations={named.name: named.data for named in data.spectra},
+        predictions={
+            named.name: np.repeat(
+                np.asarray(prediction)[None, :],
+                samples.shape[0],
+                axis=0,
+            )
+            for named, prediction in zip(data.spectra, model_predictions)
+        },
+    )
+
+    lya = result.fit_diagnostics("Ly alpha", random_seed=67)
+    si3 = result.fit_diagnostics("Si III", random_seed=67)
+
+    np.testing.assert_allclose(
+        lya.central_effective_error,
+        2.0 * data.spectra[0].data.error,
+    )
+    np.testing.assert_allclose(
+        si3.central_effective_error,
+        3.0 * data.spectra[1].data.error,
+    )
+    assert lya.likelihood_distribution == "Gaussian"
+    assert si3.likelihood_distribution == "StudentT"
+    assert si3.central_chi_squared is None

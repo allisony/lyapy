@@ -72,6 +72,15 @@ from .reconstruction import (
     posterior_percentile_bands,
     summarize_integrated_flux,
 )
+from .result_diagnostics import (
+    SpectrumFitDiagnostics,
+    effective_error_samples,
+    evaluate_fit_diagnostics,
+    plot_inference_comparison,
+    plot_inference_result,
+    posterior_predictive_bands,
+    posterior_predictive_samples,
+)
 from .workflow import (
     InferenceComparisonResult,
     InferenceComparisonRun,
@@ -115,6 +124,7 @@ __all__ = [
     "ReconstructionSamples",
     "ReconstructionEvaluator",
     "SpectrumData",
+    "SpectrumFitDiagnostics",
     "StudentTNoiseModel",
     "TruncatedNormalParameter",
     "UniformParameter",
@@ -124,6 +134,12 @@ __all__ = [
     "weighted_quantile",
     "make_reversal_comparison_configurations",
     "evaluate_reconstruction_samples",
+    "effective_error_samples",
+    "evaluate_fit_diagnostics",
+    "plot_inference_comparison",
+    "plot_inference_result",
+    "posterior_predictive_bands",
+    "posterior_predictive_samples",
     "posterior_percentile_bands",
     "summarize_integrated_flux",
     "compare_evidence",

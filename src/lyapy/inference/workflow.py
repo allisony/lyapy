@@ -583,6 +583,58 @@ class InferenceResult:
             weights=self.weights,
         )
 
+    def posterior_predictive_bands(
+        self,
+        spectrum="spectrum",
+        probabilities=DEFAULT_PERCENTILE_PROBABILITIES,
+        random_seed=0,
+    ):
+        """Summarize replicated spectra including measurement uncertainty."""
+        from lyapy.inference.result_diagnostics import (
+            posterior_predictive_bands,
+        )
+
+        return posterior_predictive_bands(
+            self,
+            spectrum=spectrum,
+            probabilities=probabilities,
+            random_seed=random_seed,
+        )
+
+    def fit_diagnostics(
+        self,
+        spectrum="spectrum",
+        *,
+        random_seed=0,
+        large_residual_threshold=3.0,
+    ):
+        """Return noise-aware fit diagnostics for one named spectrum."""
+        from lyapy.inference.result_diagnostics import evaluate_fit_diagnostics
+
+        return evaluate_fit_diagnostics(
+            self,
+            spectrum=spectrum,
+            random_seed=random_seed,
+            large_residual_threshold=large_residual_threshold,
+        )
+
+    def plot(
+        self,
+        spectrum="spectrum",
+        *,
+        random_seed=0,
+        show_posterior_predictive=True,
+    ):
+        """Create the standard fit, residual, and reconstruction figure."""
+        from lyapy.inference.result_diagnostics import plot_inference_result
+
+        return plot_inference_result(
+            self,
+            spectrum=spectrum,
+            random_seed=random_seed,
+            show_posterior_predictive=show_posterior_predictive,
+        )
+
     def integrated_flux_summary(
         self,
         spectrum="spectrum",
@@ -739,6 +791,25 @@ class InferenceComparisonResult:
             )
         except KeyError as error:
             raise KeyError(f"unknown model {error.args[0]!r}") from error
+
+    def plot(
+        self,
+        spectrum="spectrum",
+        *,
+        random_seed=0,
+        show_68_percent_bands=True,
+    ):
+        """Create a detector-space comparison and residual figure."""
+        from lyapy.inference.result_diagnostics import (
+            plot_inference_comparison,
+        )
+
+        return plot_inference_comparison(
+            self,
+            spectrum=spectrum,
+            random_seed=random_seed,
+            show_68_percent_bands=show_68_percent_bands,
+        )
 
     def as_dict(self):
         """Return JSON-compatible rankings and per-model result metadata."""

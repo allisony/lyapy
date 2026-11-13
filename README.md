@@ -147,6 +147,42 @@ manifest; `load_inference_comparison` restores the collection. Lyapy validates
 the mechanics but does not decide which hypotheses or priors are scientifically
 appropriate.
 
+### Fit diagnostics and standard plots
+
+Portable results provide the same diagnostics and figures before or after they
+are saved and reloaded:
+
+```python
+diagnostics = result.fit_diagnostics(random_seed=17)
+print(diagnostics.as_dict())
+
+figure = result.plot(random_seed=17)
+figure.savefig("fit_diagnostics.png", dpi=180)
+
+comparison_figure = comparison.plot(random_seed=17)
+comparison_figure.savefig("model_comparison.png", dpi=180)
+```
+
+The blue latent-model bands describe uncertainty in the inferred noiseless
+curve. They are deliberately distinct from the gray posterior-predictive band,
+which also draws measurement noise and is the appropriate band for checking
+whether observed pixels are plausible. Residuals are divided by the likelihood
+scale, not blindly by the reported error: fitted error-scale and jitter
+parameters are reconstructed for every posterior draw. For Student-t models,
+the reported scale is explicitly labeled as a Student-t scale and lyapy does
+not report a Gaussian chi-squared statistic. Joint fits select spectra by name,
+for example `result.plot("Si III")`.
+
+The scalar report includes residual mean, standard deviation, RMS, maximum
+absolute residual, large-residual wavelengths, effective-to-reported error
+ratios, latent-curve coverage, and posterior-predictive coverage. The error
+ratio makes inferred inflation of unusually small formal uncertainties visible
+rather than silently replacing them. Coverage of the latent curve is
+descriptive—not an expectation that noisy observations should lie inside a
+noiseless credible band. Custom likelihoods must provide one of lyapy's
+serialized Gaussian or Student-t noise specifications before
+posterior-predictive diagnostics can be generated.
+
 ### Curated stellar-model catalog
 
 The catalog intentionally provides a small number of interpretable starting

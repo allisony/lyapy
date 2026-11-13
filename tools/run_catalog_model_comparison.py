@@ -16,7 +16,6 @@ except ModuleNotFoundError as error:
 
 jax.config.update("jax_enable_x64", True)
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -25,75 +24,6 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 from lyapy.inference import InferenceProblem, compare_inference_problems
 from lyapy.inference.composable import load_gj411_composable_problem
 from lyapy.inference.model_catalog import build_gj411_model_catalog
-
-
-def fit_summary(data, result):
-    model_flux = result.prediction_bands(probabilities=(0.5,))[0]
-    residuals = (data.flux - model_flux) / data.error
-    degrees_of_freedom = data.wavelength.size - len(result.parameter_names)
-    chi_squared = np.sum(residuals**2)
-    return {
-        "chi_squared": float(chi_squared),
-        "degrees_of_freedom": int(degrees_of_freedom),
-        "reduced_chi_squared": float(chi_squared / degrees_of_freedom),
-        "residual_root_mean_square": float(np.sqrt(np.mean(residuals**2))),
-        "maximum_absolute_residual": float(np.max(np.abs(residuals))),
-    }
-
-
-def make_plot(data, entries, selection):
-    figure, (profile_axis, residual_axis) = plt.subplots(
-        2,
-        1,
-        figsize=(10.0, 7.5),
-        sharex=True,
-        gridspec_kw={"height_ratios": (3, 1)},
-    )
-    scale = 1.0e12
-    profile_axis.errorbar(
-        data.wavelength,
-        data.flux * scale,
-        yerr=data.error * scale,
-        color="0.7",
-        linewidth=0.8,
-        label="GJ 411 STIS data",
-    )
-    residual_axis.axhline(0.0, color="0.4", linewidth=1.0)
-    colors = plt.get_cmap("tab10").colors
-    line_styles = ("-", "--", "-.", ":")
-    for index, entry in enumerate(entries):
-        result = selection.get_result(entry.name)
-        model_flux = result.prediction_bands(probabilities=(0.5,))[0]
-        style = line_styles[index % len(line_styles)]
-        color = colors[index % len(colors)]
-        profile_axis.plot(
-            data.wavelength,
-            model_flux * scale,
-            color=color,
-            linestyle=style,
-            linewidth=2.0,
-            label=entry.name.replace("_", " "),
-        )
-        residual_axis.plot(
-            data.wavelength,
-            (data.flux - model_flux) / data.error,
-            color=color,
-            linestyle=style,
-            label=entry.name.replace("_", " "),
-        )
-    profile_axis.set_ylabel(r"flux density ($10^{-12}$ units)")
-    profile_axis.legend(frameon=False, ncol=2)
-    profile_axis.grid(alpha=0.2)
-    residual_axis.set_xlabel(r"wavelength ($\AA$)")
-    residual_axis.set_ylabel("residual / error")
-    residual_axis.grid(alpha=0.2)
-    residual_axis.legend(frameon=False, ncol=2, fontsize="small")
-    figure.suptitle(
-        "GJ 411 stellar-model catalog comparison: "
-        f"best = {selection.best_model.replace('_', ' ')}"
-    )
-    figure.tight_layout()
-    return figure
 
 
 def parse_arguments():
@@ -174,7 +104,9 @@ def main():
         model_reports[entry.name] = {
             "catalog": entry.as_dict(),
             "posterior": result.diagnostics,
-            "fit": fit_summary(problem.data, result),
+            "fit": result.fit_diagnostics(
+                random_seed=arguments.seed
+            ).as_dict(),
         }
     report = {
         "problem": "observed GJ 411 curated stellar-model comparison",
@@ -193,7 +125,7 @@ def main():
         "model_selection": selection.as_dict(),
         "models": model_reports,
     }
-    figure = make_plot(problem.data, entries, selection)
+    figure = selection.plot(random_seed=arguments.seed)
     prefix = arguments.output_prefix
     plot_path = prefix.with_suffix(".png")
     report_path = prefix.with_suffix(".json")
