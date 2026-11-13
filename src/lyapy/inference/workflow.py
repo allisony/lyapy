@@ -158,6 +158,25 @@ class InferenceProblem:
             **dynesty_options,
         )
 
+    def prior_predictive(
+        self,
+        *,
+        draws=1000,
+        random_seed=0,
+        reconstruct=True,
+        reconstruction_batch_size=None,
+    ):
+        """Draw parameters and spectra directly from the declared priors."""
+        from lyapy.inference.prior import sample_prior_predictive
+
+        return sample_prior_predictive(
+            self,
+            draws=draws,
+            random_seed=random_seed,
+            reconstruct=reconstruct,
+            reconstruction_batch_size=reconstruction_batch_size,
+        )
+
 
 def _observation_mapping(problem):
     if isinstance(problem.data, JointSpectrumData):
@@ -616,6 +635,25 @@ class InferenceResult:
             spectrum=spectrum,
             random_seed=random_seed,
             large_residual_threshold=large_residual_threshold,
+        )
+
+    def prior_boundary_diagnostics(
+        self,
+        *,
+        boundary_fraction=0.05,
+        warning_probability=0.2,
+        boundary_distance_in_posterior_widths=0.5,
+    ):
+        """Report posterior mass near each bounded prior edge."""
+        from lyapy.inference.prior import analyze_prior_boundaries
+
+        return analyze_prior_boundaries(
+            self,
+            boundary_fraction=boundary_fraction,
+            warning_probability=warning_probability,
+            boundary_distance_in_posterior_widths=(
+                boundary_distance_in_posterior_widths
+            ),
         )
 
     def plot(

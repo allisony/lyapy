@@ -183,6 +183,87 @@ noiseless credible band. Custom likelihoods must provide one of lyapy's
 serialized Gaussian or Student-t noise specifications before
 posterior-predictive diagnostics can be generated.
 
+### Prior-predictive and sensitivity checks
+
+Inspect the spectra implied by a problem's priors before spending time on a
+fit:
+
+```python
+prior_result = problem.prior_predictive(
+    draws=1000,
+    random_seed=17,
+)
+prior_figure = prior_result.plot()
+prior_figure.savefig("prior_predictive.png", dpi=180)
+```
+
+These are latent forward-model curves drawn from the declared parameter priors;
+they do not include simulated measurement noise. The plot overlays the observed
+spectrum only as a scale and plausibility reference. Lyapy does not
+automatically reject a scientifically unusual prior prediction.
+
+After fitting, posterior mass near a bounded prior edge can be inspected with:
+
+```python
+for diagnostic in result.prior_boundary_diagnostics():
+    print(diagnostic.parameter, diagnostic.pressure)
+```
+
+By default, `pressure` requires both at least 20% of posterior mass in the lower
+or upper 5% of the allowed interval and a central 90% posterior interval whose
+nearest edge is within half of its own width from the hard bound. The report
+also exposes edge mass and boundary distance separately. These thresholds are
+configurable and descriptive; pressure is not automatically proof that the
+prior should be widened.
+
+Named scenarios make prior sensitivity explicit and reproducible:
+
+```python
+from dataclasses import replace
+from lyapy.inference import (
+    PriorSensitivityScenario,
+    load_prior_sensitivity,
+    run_prior_sensitivity,
+    with_prior_bounds,
+)
+
+broad_problems = (single_gaussian_problem, single_voigt_problem)
+narrow_problems = tuple(
+    replace(
+        problem,
+        configuration=with_prior_bounds(
+            problem.configuration,
+            {"log_total_flux": (-12.2, -11.2)},
+        ),
+    )
+    for problem in broad_problems
+)
+
+sensitivity = run_prior_sensitivity(
+    (
+        PriorSensitivityScenario("broad", broad_problems),
+        PriorSensitivityScenario("narrow flux", narrow_problems),
+    ),
+    random_seed=93,
+    nlive=500,
+    dlogz=0.05,
+)
+print(sensitivity.winner_stable, sensitivity.ranking_stable)
+print(sensitivity.pairwise_summary("single_voigt", "single_gaussian"))
+sensitivity.plot("single_voigt", "single_gaussian")
+sensitivity.save("prior_sensitivity")
+restored_sensitivity = load_prior_sensitivity("prior_sensitivity")
+```
+
+The report records every model and prior in every scenario, whether the winner
+and complete ranking remain stable, changes in pairwise evidence strength, and
+the span of each Δlog evidence relative to its sampling uncertainty. It does
+not choose priors or declare one scenario authoritative. Scenario validation
+requires identical observations, model ordering, fixed parameters, forward
+models, likelihoods, and free-parameter indices; only the declared prior
+distributions may change. Deriving scenarios with `dataclasses.replace`, as
+above, preserves that identity explicitly.
+
 ### Curated stellar-model catalog
 
 The catalog intentionally provides a small number of interpretable starting
