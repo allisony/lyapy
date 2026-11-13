@@ -83,15 +83,8 @@ def build_gj411_composable_forward_model(
     model_padding=1.0,
 ):
     """Build the reviewed stellar, ISM, and STIS operator for one grid."""
-    package = resources.files("lyapy")
-    with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
-        lsf = load_tabulated_lsf(path)
-    wavelength = np.asarray(wavelength, dtype=np.float64)
-    dispersion = float(np.median(np.diff(wavelength)))
-    operator = build_high_resolution_operator(
+    operator = build_gj411_observation_operator(
         wavelength,
-        lsf.offset * dispersion,
-        lsf.profile,
         oversample=oversample,
         model_padding=model_padding,
     )
@@ -108,6 +101,28 @@ def build_gj411_composable_forward_model(
         operator,
         absorption_model=absorption,
     )
+
+
+def build_gj411_observation_operator(
+    wavelength,
+    *,
+    oversample=8,
+    model_padding=1.0,
+):
+    """Build the shared E140M high-resolution operator for GJ 411."""
+    package = resources.files("lyapy")
+    with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
+        lsf = load_tabulated_lsf(path)
+    wavelength = np.asarray(wavelength, dtype=np.float64)
+    dispersion = float(np.median(np.diff(wavelength)))
+    operator = build_high_resolution_operator(
+        wavelength,
+        lsf.offset * dispersion,
+        lsf.profile,
+        oversample=oversample,
+        model_padding=model_padding,
+    )
+    return operator
 
 
 def load_gj411_composable_problem(

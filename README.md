@@ -37,6 +37,8 @@ python tools/run_full_recovery.py
 python tools/run_gj411_inference.py
 python tools/run_gj411_model_comparison.py
 python tools/run_composable_model_comparison.py
+python tools/run_catalog_model_comparison.py --list-models
+python tools/run_catalog_model_comparison.py --models single_gaussian single_voigt
 ```
 
 The smoke test varies two parameters. The recovery scripts then validate five
@@ -55,6 +57,24 @@ The composable comparison command uses the corrected high-resolution order of
 operations, untruncated H I/D I absorption, a direct intrinsic-total-flux
 parameter, and the detector-bin integration operator. It records the complete
 model and prior specification alongside the evidence results.
+
+### Curated stellar-model catalog
+
+The catalog intentionally provides a small number of interpretable starting
+models rather than every possible component combination:
+
+- `single_gaussian`: one Gaussian without reversal;
+- `single_voigt`: one Voigt without reversal;
+- `double_gaussian`: ordered narrow and broad Gaussians without reversal;
+- `gaussian_gaussian_reversal`: Gaussian emission with Gaussian optical-depth reversal;
+- `voigt_legacy_reversal`: Voigt emission with the historical intensity-linked reversal;
+- `voigt_gaussian_reversal`: Voigt emission with Gaussian optical-depth reversal.
+
+The double-Gaussian width priors are non-overlapping to prevent component-label
+switching. Each catalog entry records its components, complete parameter
+schema, prior types, and bounds. User-defined emission or absorption objects
+can be registered with `make_model_catalog_entry` as long as they implement the
+same small component interfaces used by the standard models.
 
 ### Comparing arbitrary models
 
