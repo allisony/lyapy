@@ -40,5 +40,7 @@ python tools/run_gj411_inference.py
 The smoke test varies two parameters. The recovery scripts then validate five
 stellar parameters and the full eight-parameter stellar-plus-ISM model on
 synthetic spectra. The final command fits the observed GJ 411 STIS E140M
-spectrum and writes posterior, spectrum, and JSON diagnostic products. These
-runs keep D/H, the inactive second absorber, and the tabulated STIS LSF fixed.
+spectrum and writes posterior, fitted-spectrum, reconstruction, reusable NPZ,
+and JSON diagnostic products. The reconstruction includes 68% and 95% profile
+bands and the integrated intrinsic Ly-alpha flux posterior. These runs keep
+D/H, the inactive second absorber, and the tabulated STIS LSF fixed.

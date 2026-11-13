@@ -15,3 +15,4 @@ identifiability*.json
 stellar_recovery*.json
 full_recovery*.json
 gj411_inference*.json
+gj411_inference*.npz

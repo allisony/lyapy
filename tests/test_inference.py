@@ -24,6 +24,11 @@ from lyapy.inference.diagnostics import (
     weighted_quantile,
 )
 from lyapy.inference.numpyro_backend import numpyro_spectrum_model, run_nuts
+from lyapy.inference.reconstruction import (
+    evaluate_reconstruction_samples,
+    posterior_percentile_bands,
+    summarize_integrated_flux,
+)
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
 from tests._legacy_reference import PARAMETERS, evaluate_gj411_legacy_case
 
@@ -223,3 +228,42 @@ def test_weighted_quantile_validates_and_uses_weights():
     assert weighted_quantile(values, 0.5, [0.05, 0.05, 0.9]) > 1.0
     with pytest.raises(ValueError, match="positive sum"):
         weighted_quantile(values, 0.5, np.zeros(3))
+
+
+def test_posterior_reconstruction_profiles_and_integrated_flux(synthetic_problem):
+    data, configuration, truth = synthetic_problem
+    free_values = np.vstack((truth, truth + np.array([0.02, 0.05])))
+
+    reconstruction = evaluate_reconstruction_samples(
+        data,
+        configuration,
+        free_values,
+    )
+
+    assert reconstruction.intrinsic.shape == (2, data.wavelength.size)
+    assert reconstruction.convolved_observed.shape == (2, data.wavelength.size)
+    np.testing.assert_allclose(
+        reconstruction.integrated_intrinsic_flux,
+        np.trapezoid(reconstruction.intrinsic, data.wavelength, axis=1),
+    )
+
+
+def test_reconstruction_summaries_support_weighted_samples():
+    profiles = np.array([[0.0, 1.0], [1.0, 2.0], [10.0, 20.0]])
+    weights = np.array([0.05, 0.05, 0.9])
+
+    unweighted = posterior_percentile_bands(profiles, probabilities=(0.5,))
+    weighted = posterior_percentile_bands(
+        profiles,
+        probabilities=(0.5,),
+        weights=weights,
+    )
+    flux_summary = summarize_integrated_flux(
+        np.array([1.0, 2.0, 10.0]),
+        probabilities=(0.5,),
+        weights=weights,
+    )
+
+    np.testing.assert_allclose(unweighted, [[1.0, 2.0]])
+    assert np.all(weighted > unweighted)
+    assert flux_summary["percentiles"][0] > 2.0
