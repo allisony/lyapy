@@ -6,7 +6,12 @@ jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
-from lyapy.jax_models import evaluate_voigt_lya_model_jax
+from scipy.special import voigt_profile
+
+from lyapy.jax_models import (
+    evaluate_voigt_lya_model_jax,
+    normalized_voigt_profile_jax,
+)
 from tests._legacy_reference import PARAMETERS, evaluate_gj411_legacy_case
 
 
@@ -38,6 +43,24 @@ def test_jax_model_matches_numpy_baseline(model_inputs):
         np.abs(result.convolved.observed - reference["model_convolved"])
     ) / np.max(np.abs(reference["model_convolved"]))
     assert model_error < 6e-5
+
+
+def test_normalized_jax_voigt_matches_scipy_probability_density():
+    wavelength = np.linspace(-2.0, 2.0, 20_001)
+    gaussian_fwhm = 0.24
+    lorentz_fwhm = 0.05
+    sigma = gaussian_fwhm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
+    gamma = 0.5 * lorentz_fwhm
+
+    actual = normalized_voigt_profile_jax(
+        wavelength,
+        0.0,
+        lorentz_fwhm,
+        gaussian_fwhm,
+    )
+    expected = voigt_profile(wavelength, sigma, gamma)
+
+    np.testing.assert_allclose(actual, expected, rtol=4e-5, atol=1e-14)
 
 
 def test_jax_model_jit_matches_eager_evaluation(model_inputs):
