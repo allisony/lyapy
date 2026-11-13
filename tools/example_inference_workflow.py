@@ -309,10 +309,25 @@ def parse_arguments():
 
 def main():
     arguments = parse_arguments()
+    arguments.output_directory.mkdir(parents=True, exist_ok=True)
     problem = make_problem(
         oversample=arguments.oversample,
         model_padding=arguments.model_padding,
     )
+
+    # Check the model and priors before fitting. This draws noiseless forward
+    # curves from the declared priors; unusually broad or structured bands are
+    # information for the user, not something lyapy edits automatically.
+    prior_result = problem.prior_predictive(
+        draws=64 if arguments.quick else 1000,
+        random_seed=arguments.random_seed,
+    )
+    prior_figure_path = (
+        arguments.output_directory / "gj411_prior_predictive.png"
+    )
+    prior_result.plot().savefig(prior_figure_path, dpi=180)
+    plt.close("all")
+
     result = run_problem(
         problem,
         backend=arguments.backend,
@@ -321,7 +336,6 @@ def main():
         progress=not arguments.no_progress,
     )
 
-    arguments.output_directory.mkdir(parents=True, exist_ok=True)
     output_stem = arguments.output_directory / f"gj411_{arguments.backend}_fit"
     json_path, arrays_path = result.save(output_stem)
     # Loading requires only the JSON path; it points to the adjacent NPZ file.
@@ -346,6 +360,17 @@ def main():
             indent=2,
         )
     )
+    print("Prior-boundary diagnostics:")
+    print(
+        json.dumps(
+            [
+                diagnostic.as_dict()
+                for diagnostic in restored_result.prior_boundary_diagnostics()
+            ],
+            indent=2,
+        )
+    )
+    print(f"Saved prior-predictive plot: {prior_figure_path}")
     print(f"Saved metadata: {json_path}")
     print(f"Saved numerical arrays: {arrays_path}")
     print(f"Saved fit plot: {figure_path}")
