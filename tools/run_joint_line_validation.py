@@ -37,9 +37,12 @@ from lyapy.inference.joint import (
     NamedSpectrumData,
 )
 from lyapy.inference.numpyro_backend import run_nuts
-from lyapy.jax_components import CompositeEmissionModel, GaussianEmissionComponent
 from lyapy.jax_composable import ComposableBinnedModel
 from lyapy.jax_instrument import build_high_resolution_operator
+from lyapy.spectral_lines import (
+    SPECTRAL_LINE_GROUPS,
+    gaussian_emission_model_for_line_group,
+)
 
 
 PARAMETER_NAMES = (
@@ -66,16 +69,20 @@ def gaussian_operator(wavelength, sigma=0.018, oversample=8):
 
 def build_joint_forward_model(lya_wavelength, si3_wavelength, oversample=8):
     lya = ComposableBinnedModel(
-        CompositeEmissionModel(
-            (GaussianEmissionComponent(1215.67, 0, 2),),
-            1,
+        gaussian_emission_model_for_line_group(
+            "lya",
+            velocity_index=0,
+            fwhm_index=2,
+            log_total_flux_index=1,
         ),
         gaussian_operator(lya_wavelength, oversample=oversample),
     )
     si3 = ComposableBinnedModel(
-        CompositeEmissionModel(
-            (GaussianEmissionComponent(1206.50, 0, 4),),
-            3,
+        gaussian_emission_model_for_line_group(
+            "si_iii_1206",
+            velocity_index=0,
+            fwhm_index=4,
+            log_total_flux_index=3,
         ),
         gaussian_operator(si3_wavelength, oversample=oversample),
     )
@@ -259,6 +266,10 @@ def main():
         "line_specific_parameters": {
             "Ly alpha": ["lya_log_total_flux", "lya_fwhm"],
             "Si III": ["si3_log_total_flux", "si3_fwhm"],
+        },
+        "spectral_line_groups": {
+            key: SPECTRAL_LINE_GROUPS[key].as_dict()
+            for key in ("lya", "si_iii_1206")
         },
     }
     figure = make_plot(data, samples, truth_fluxes)

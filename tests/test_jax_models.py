@@ -11,7 +11,9 @@ from scipy.special import voigt_profile
 from lyapy.jax_models import (
     _interpolate_harris_tables,
     evaluate_voigt_lya_model_jax,
+    line_optical_depth_jax,
     normalized_voigt_profile_jax,
+    transition_optical_depth_jax,
 )
 from lyapy import voigt as legacy_voigt
 from tests._legacy_reference import PARAMETERS, evaluate_gj411_legacy_case
@@ -95,6 +97,28 @@ def test_normalized_jax_voigt_matches_scipy_probability_density():
     expected = voigt_profile(wavelength, sigma, gamma)
 
     np.testing.assert_allclose(actual, expected, rtol=4e-5, atol=1e-14)
+
+
+def test_jax_optical_depth_accepts_atomic_catalog_key():
+    wavelength = jnp.linspace(1238.3, 1239.3, 101)
+    from_catalog = transition_optical_depth_jax(
+        wavelength,
+        14.0,
+        4.0,
+        12.0,
+        "n_v_1238",
+    )
+    explicit = line_optical_depth_jax(
+        wavelength,
+        14.0,
+        4.0,
+        12.0,
+        1238.821,
+        1.560e-1,
+        3.391e8,
+    )
+
+    np.testing.assert_array_equal(from_catalog, explicit)
 
 
 def test_jax_model_jit_matches_eager_evaluation(model_inputs):

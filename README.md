@@ -350,5 +350,62 @@ python tools/run_joint_line_validation.py --no-progress
 
 This validation shares stellar velocity between synthetic Ly-alpha and Si III
 while fitting separate fluxes and widths. It demonstrates inference mechanics,
-not a recommended physical Si III prescription. Scientific component catalogs
-and curated priors for Si III, N V, O V, C II, and Mg II remain separate work.
+not a recommended physical Si III prescription. Curated physical priors for
+Si III, N V, O V, C II, and Mg II remain separate work.
+
+### UV spectral-line and multiplet catalog
+
+`lyapy.atomic_data` provides vacuum rest wavelengths, oscillator strengths,
+radiative damping rates, and provenance for H I Ly-alpha, Si III 1206, the
+N V 1238/1242 doublet, O V 1218, the C II 1334/1335 multiplet, and Mg II h
+and k. Values are transcribed from Morton (2003), ApJS, 149, 205, Table 2
+(doi:10.1086/377639). `lyapy.spectral_lines` organizes those transitions into
+emission-line groups. Gaussian or Voigt components can share velocity and
+width parameters while using either fixed or sampled relative strengths:
+
+```python
+from lyapy.spectral_lines import (
+    SPECTRAL_LINE_GROUPS,
+    gaussian_emission_model_for_line_group,
+)
+
+nv = SPECTRAL_LINE_GROUPS["n_v_1238_1242"]
+nv_emission = gaussian_emission_model_for_line_group(
+    nv,
+    velocity_index=0,
+    fwhm_index=2,
+    log_total_flux_index=1,
+    log_relative_weight_indices=(3,),
+)
+```
+
+Here parameter 3 is the log10 strength of N V 1242 relative to N V 1238.
+Alternatively, pass `relative_weights=(2, 1)` for an explicitly chosen fixed
+ratio. The catalog records the familiar optically thin 2:1 references for N V
+and Mg II, but multiplet constructors never apply a catalog ratio implicitly:
+optical depth and radiative transfer can change those ratios substantially.
+C II intentionally has no catalog ratio.
+
+Users can define an `AtomicTransition` and `SpectralLineGroup` and pass it to
+the same constructors, avoiding an endless hard-coded combination catalog.
+The transition metadata are building blocks, not universal profile choices or
+prior recommendations. The synthetic joint Ly-alpha/Si III validation uses
+these catalog constructors directly.
+
+Each `AtomicTransition` exposes
+`(rest_wavelength, oscillator_strength, damping_rate)` through
+`absorption_parameters()`. The NumPy ISM calculation accepts either a catalog
+key or an `AtomicTransition`, for example
+`tau_profile(..., line="n_v_1238")`; the JAX equivalent is
+`transition_optical_depth_jax(..., transition="n_v_1238")`.
+Phenomenological stellar-emission models use the wavelengths but do not use
+the oscillator strengths or atomic damping rates as fitted profile widths.
+
+The historical absorption names `mg2_h` and `mg2_k` were reversed: the former
+evaluated the 2796-A k line and the latter the 2803-A h line. They remain as
+deprecated aliases so old calculations are reproducible. New code should use
+the physically named `mg_ii_k` and `mg_ii_h` catalog keys. The D I Ly-alpha
+constants used by the legacy H I + D I model remain explicitly identified as
+legacy values because D I is not a Morton (2003) Table 2 entry. Likewise, the
+historical `h1` key retains lyapy's previous H I constants so frozen analyses
+remain reproducible; use `h_i_1215` to select the Morton values explicitly.

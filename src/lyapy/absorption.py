@@ -1,8 +1,12 @@
 """Interstellar absorption profiles for Lyman-alpha forward models."""
 
+from types import MappingProxyType
+import warnings
+
 import numpy as np
 
 from . import voigt
+from .atomic_data import ATOMIC_TRANSITIONS, AtomicTransition
 
 
 SPEED_OF_LIGHT_KM_S = 2.99792458e5
@@ -11,12 +15,71 @@ ELECTRON_CHARGE_ESU = 4.8032e-10
 PROTON_MASS_G = 1.6726231e-24
 ELECTRON_MASS_G = PROTON_MASS_G / 1836.0
 
-LINE_DATA = {
-    "h1": (1215.67, 0.4161, 6.26e8),
-    "d1": (1215.3394, 0.4161, 6.27e8),
-    "mg2_h": (2796.3543, 6.155e-1, 2.625e8),
-    "mg2_k": (2803.5315, 3.058e-1, 2.595e8),
-}
+_LEGACY_HYDROGEN_LYA = AtomicTransition(
+    "legacy_h1",
+    "H I",
+    "Legacy H I Ly-alpha",
+    1215.67,
+    0.4161,
+    6.26e8,
+    "Legacy lyapy H I constants retained for numerical reproducibility",
+)
+
+_DEUTERIUM_LYA = AtomicTransition(
+    "d_i_1215",
+    "D I",
+    "D I Ly-alpha",
+    1215.3394,
+    0.4161,
+    6.27e8,
+    "Legacy lyapy D I constants; not a Morton (2003) Table 2 entry",
+)
+
+# The historical ``mg2_h`` and ``mg2_k`` labels were reversed: 2796 A is k
+# and 2803 A is h.  Preserve their numerical behavior as deprecated aliases,
+# while exposing unambiguous canonical catalog keys for new calculations.
+_LEGACY_LINE_ALIASES = MappingProxyType(
+    {
+        "h1": _LEGACY_HYDROGEN_LYA,
+        "d1": _DEUTERIUM_LYA,
+        "mg2_h": ATOMIC_TRANSITIONS["mg_ii_k"],
+        "mg2_k": ATOMIC_TRANSITIONS["mg_ii_h"],
+    }
+)
+
+LINE_DATA = MappingProxyType(
+    {
+        **{
+            key: transition.absorption_parameters()
+            for key, transition in ATOMIC_TRANSITIONS.items()
+        },
+        **{
+            key: transition.absorption_parameters()
+            for key, transition in _LEGACY_LINE_ALIASES.items()
+        },
+    }
+)
+
+
+def _absorption_parameters(line):
+    if isinstance(line, AtomicTransition):
+        return line.absorption_parameters()
+    try:
+        parameters = LINE_DATA[line]
+    except (KeyError, TypeError) as error:
+        choices = ", ".join(repr(name) for name in LINE_DATA)
+        raise ValueError(
+            f"line must be an AtomicTransition or one of {choices}"
+        ) from error
+    if line in ("mg2_h", "mg2_k"):
+        canonical = "mg_ii_k" if line == "mg2_h" else "mg_ii_h"
+        warnings.warn(
+            f"{line!r} is a deprecated, historically reversed alias; "
+            f"use {canonical!r}",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+    return parameters
 
 
 def tau_profile(
@@ -32,11 +95,9 @@ def tau_profile(
     results remain unchanged. Column density is log10(cm^-2); velocities and
     Doppler ``b`` are in km/s.
     """
-    try:
-        rest_wavelength, oscillator_strength, damping_rate = LINE_DATA[line]
-    except KeyError as error:
-        choices = ", ".join(repr(name) for name in LINE_DATA)
-        raise ValueError(f"line must be one of {choices}") from error
+    rest_wavelength, oscillator_strength, damping_rate = _absorption_parameters(
+        line
+    )
 
     column_density = 10.0**log_column_density
     grid_size = 4000

@@ -15,6 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from . import voigt as legacy_voigt
+from .atomic_data import get_atomic_transition
 
 
 LYA_REST_WAVELENGTH = 1215.67
@@ -296,6 +297,24 @@ def line_optical_depth_jax(
     u_parameter = (rest_frame_frequency - frequency_center) / doppler_frequency
     cross_section = cross_section_center * _harris_voigt(a_parameter, u_parameter)
     return cross_section * column_density
+
+
+def transition_optical_depth_jax(
+    wavelength,
+    log_column,
+    velocity,
+    doppler_b,
+    transition,
+):
+    """Evaluate optical depth using a catalog or user-defined transition."""
+    transition = get_atomic_transition(transition)
+    return line_optical_depth_jax(
+        wavelength,
+        log_column,
+        velocity,
+        doppler_b,
+        *transition.absorption_parameters(),
+    )
 
 
 def hydrogen_deuterium_transmission_jax(
