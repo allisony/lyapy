@@ -101,13 +101,17 @@ def normalized_dynesty_weights(sampler):
 def make_corner_plot(
     nuts_samples,
     nested,
-    truth,
+    truth=None,
     parameter_names=PARAMETER_NAMES,
     parameter_labels=PARAMETER_LABELS,
     title="Five-parameter synthetic GJ 411 recovery",
 ):
     """Overlay NUTS and dynesty joint posteriors."""
-    truths = np.asarray([truth[name] for name in parameter_names])
+    truths = (
+        None
+        if truth is None
+        else np.asarray([truth[name] for name in parameter_names])
+    )
     nuts_matrix = np.column_stack(
         [np.asarray(nuts_samples[name]) for name in parameter_names]
     )
@@ -120,8 +124,11 @@ def make_corner_plot(
             (0.005, 0.995),
             weights,
         )
-        lower = min(nuts_limits[0], dynesty_limits[0], truth[name])
-        upper = max(nuts_limits[1], dynesty_limits[1], truth[name])
+        values = (*nuts_limits, *dynesty_limits)
+        if truth is not None:
+            values += (truth[name],)
+        lower = min(values)
+        upper = max(values)
         padding = 0.08 * (upper - lower)
         ranges.append((lower - padding, upper + padding))
     figure = corner.corner(
@@ -147,12 +154,16 @@ def make_corner_plot(
         range=ranges,
         fig=figure,
     )
+    legend_handles = [
+        Line2D([], [], color="#d6278b", label="NumPyro/NUTS"),
+        Line2D([], [], color="#1f77b4", label="dynesty"),
+    ]
+    if truth is not None:
+        legend_handles.append(
+            Line2D([], [], color="black", linestyle="--", label="truth")
+        )
     figure.legend(
-        handles=(
-            Line2D([], [], color="#d6278b", label="NumPyro/NUTS"),
-            Line2D([], [], color="#1f77b4", label="dynesty"),
-            Line2D([], [], color="black", linestyle="--", label="truth"),
-        ),
+        handles=legend_handles,
         loc="upper right",
         frameon=False,
     )
@@ -167,8 +178,9 @@ def make_spectrum_plot(
     nested,
     parameter_names=PARAMETER_NAMES,
     title="Five-parameter posterior representative curves",
+    data_label="synthetic data",
 ):
-    """Compare posterior representative curves with the synthetic spectrum."""
+    """Compare posterior representative curves with the fitted spectrum."""
     nuts_median = np.asarray(
         [np.median(nuts_samples[name]) for name in parameter_names]
     )
@@ -192,7 +204,7 @@ def make_spectrum_plot(
         yerr=data.error * 1e12,
         color="0.65",
         linewidth=0.8,
-        label="synthetic data",
+        label=data_label,
     )
     profile_axis.plot(
         data.wavelength,
@@ -232,24 +244,66 @@ def make_spectrum_plot(
     return figure
 
 
-def make_checks(nuts_summary, dynesty_summary):
+def make_checks(nuts_summary, dynesty_summary, truth_available=True):
     r_hats = [
         parameter["r_hat"]
         for parameter in nuts_summary["parameters"].values()
         if parameter["r_hat"] is not None
     ]
-    return {
+    intervals_overlap = []
+    for name, nuts_parameter in nuts_summary["parameters"].items():
+        dynesty_parameter = dynesty_summary["parameters"][name]
+        nuts_lower, nuts_upper = nuts_parameter["credible_interval"]
+        dynesty_lower, dynesty_upper = dynesty_parameter["credible_interval"]
+        intervals_overlap.append(
+            max(nuts_lower, dynesty_lower) <= min(nuts_upper, dynesty_upper)
+        )
+    checks = {
         "nuts_no_divergences": nuts_summary["divergences"] == 0,
         "nuts_r_hat_at_most_1_01": bool(r_hats and max(r_hats) <= 1.01),
-        "nuts_truth_in_all_intervals": all(
-            parameter["truth_in_interval"]
-            for parameter in nuts_summary["parameters"].values()
-        ),
-        "dynesty_truth_in_all_intervals": all(
-            parameter["truth_in_interval"]
-            for parameter in dynesty_summary["parameters"].values()
-        ),
+        "nuts_dynesty_intervals_overlap": all(intervals_overlap),
     }
+    if truth_available:
+        checks.update(
+            nuts_truth_in_all_intervals=all(
+                parameter["truth_in_interval"]
+                for parameter in nuts_summary["parameters"].values()
+            ),
+            dynesty_truth_in_all_intervals=all(
+                parameter["truth_in_interval"]
+                for parameter in dynesty_summary["parameters"].values()
+            ),
+        )
+    return checks
+
+
+def make_fit_summary(data, configuration, nuts_samples, nested, parameter_names):
+    """Summarize representative posterior fits in residual units."""
+    nuts_median = np.asarray(
+        [np.median(nuts_samples[name]) for name in parameter_names]
+    )
+    dynesty_mean = np.average(
+        nested.results.samples,
+        axis=0,
+        weights=normalized_dynesty_weights(nested),
+    )
+    degrees_of_freedom = data.wavelength.size - len(parameter_names)
+    summary = {}
+    representatives = (
+        ("nuts_median", nuts_median),
+        ("dynesty_mean", dynesty_mean),
+    )
+    for name, values in representatives:
+        residuals = (data.flux - predict(data, configuration, values)) / data.error
+        chi_squared = np.sum(residuals**2)
+        summary[name] = {
+            "chi_squared": float(chi_squared),
+            "degrees_of_freedom": int(degrees_of_freedom),
+            "reduced_chi_squared": float(chi_squared / degrees_of_freedom),
+            "residual_root_mean_square": float(np.sqrt(np.mean(residuals**2))),
+            "maximum_absolute_residual": float(np.max(np.abs(residuals))),
+        }
+    return summary
 
 
 def parse_arguments(default_output_prefix="stellar_recovery", description=__doc__):
@@ -282,6 +336,8 @@ def main(
     plot_title="Five-parameter synthetic GJ 411 recovery",
     default_output_prefix="stellar_recovery",
     description=__doc__,
+    problem_factory=make_synthetic_problem,
+    data_label="synthetic data",
 ):
     arguments = parse_arguments(default_output_prefix, description)
     parameter_names = tuple(
@@ -291,7 +347,7 @@ def main(
     corner_path = prefix.with_name(prefix.name + "_corner.png")
     spectrum_path = prefix.with_name(prefix.name + "_spectrum.png")
     report_path = prefix.with_name(prefix.name + ".json")
-    data, configuration, truth = make_synthetic_problem(
+    data, configuration, truth = problem_factory(
         arguments.seed,
         configuration,
     )
@@ -346,7 +402,18 @@ def main(
         "runtime_seconds": {"nuts": nuts_seconds, "dynesty": dynesty_seconds},
         "nuts": nuts_summary,
         "dynesty": dynesty_summary,
-        "checks": make_checks(nuts_summary, dynesty_summary),
+        "fit": make_fit_summary(
+            data,
+            configuration,
+            nuts.get_samples(),
+            nested,
+            parameter_names,
+        ),
+        "checks": make_checks(
+            nuts_summary,
+            dynesty_summary,
+            truth_available=truth is not None,
+        ),
     }
 
     corner_figure = make_corner_plot(
@@ -364,6 +431,7 @@ def main(
         nested,
         parameter_names=parameter_names,
         title=plot_title + " curves",
+        data_label=data_label,
     )
     prefix.parent.mkdir(parents=True, exist_ok=True)
     corner_figure.savefig(corner_path, dpi=180, bbox_inches="tight")

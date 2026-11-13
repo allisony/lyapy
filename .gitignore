@@ -14,3 +14,4 @@ model_comparison*.json
 identifiability*.json
 stellar_recovery*.json
 full_recovery*.json
+gj411_inference*.json
