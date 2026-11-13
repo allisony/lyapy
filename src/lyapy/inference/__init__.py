@@ -32,12 +32,18 @@ from .composable import (
     GJ411_COMPOSABLE_CONFIGURATION,
     ComposableInferenceProblem,
     build_gj411_composable_forward_model,
+    build_gj411_observation_operator,
     load_gj411_composable_problem,
 )
 from .identifiability import (
     IdentifiabilityResult,
     analyze_local_identifiability,
     prior_standard_deviation,
+)
+from .model_catalog import (
+    ModelCatalogEntry,
+    build_gj411_model_catalog,
+    make_model_catalog_entry,
 )
 from .reconstruction import (
     DEFAULT_PERCENTILE_PROBABILITIES,
@@ -60,6 +66,7 @@ __all__ = [
     "ComposableInferenceProblem",
     "IdentifiabilityResult",
     "ModelComparison",
+    "ModelCatalogEntry",
     "ModelEvidenceRun",
     "ModelHypothesis",
     "ModelSelectionResult",
@@ -81,5 +88,8 @@ __all__ = [
     "analyze_local_identifiability",
     "prior_standard_deviation",
     "build_gj411_composable_forward_model",
+    "build_gj411_observation_operator",
+    "build_gj411_model_catalog",
     "load_gj411_composable_problem",
+    "make_model_catalog_entry",
 ]
