@@ -338,6 +338,7 @@ def main(
     description=__doc__,
     problem_factory=make_synthetic_problem,
     data_label="synthetic data",
+    postprocess=None,
 ):
     arguments = parse_arguments(default_output_prefix, description)
     parameter_names = tuple(
@@ -347,6 +348,7 @@ def main(
     corner_path = prefix.with_name(prefix.name + "_corner.png")
     spectrum_path = prefix.with_name(prefix.name + "_spectrum.png")
     report_path = prefix.with_name(prefix.name + ".json")
+    prefix.parent.mkdir(parents=True, exist_ok=True)
     data, configuration, truth = problem_factory(
         arguments.seed,
         configuration,
@@ -415,6 +417,18 @@ def main(
             truth_available=truth is not None,
         ),
     }
+    additional_paths = []
+    if postprocess is not None:
+        additional_report, additional_paths = postprocess(
+            data,
+            configuration,
+            nuts,
+            nested,
+            parameter_names,
+            prefix,
+            arguments.seed,
+        )
+        report.update(additional_report)
 
     corner_figure = make_corner_plot(
         nuts.get_samples(),
@@ -433,7 +447,6 @@ def main(
         title=plot_title + " curves",
         data_label=data_label,
     )
-    prefix.parent.mkdir(parents=True, exist_ok=True)
     corner_figure.savefig(corner_path, dpi=180, bbox_inches="tight")
     spectrum_figure.savefig(spectrum_path, dpi=180, bbox_inches="tight")
     plt.close(corner_figure)
@@ -445,6 +458,8 @@ def main(
     print(f"dynesty runtime: {dynesty_seconds:.2f} s")
     print(f"Wrote {corner_path.resolve()}")
     print(f"Wrote {spectrum_path.resolve()}")
+    for path in additional_paths:
+        print(f"Wrote {path.resolve()}")
     print(f"Wrote {report_path.resolve()}")
 
 
