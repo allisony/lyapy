@@ -7,6 +7,7 @@ from .common import (
     SpectrumData,
     TruncatedNormalParameter,
     UniformParameter,
+    make_reversal_comparison_configurations,
 )
 from .diagnostics import (
     summarize_dynesty,
@@ -14,7 +15,17 @@ from .diagnostics import (
     summarize_parameters,
     weighted_quantile,
 )
-from .comparison import EvidenceEstimate, ModelComparison, compare_evidence
+from .comparison import (
+    EvidenceEstimate,
+    EvidenceRanking,
+    ModelComparison,
+    ModelEvidenceRun,
+    ModelHypothesis,
+    ModelSelectionResult,
+    compare_evidence,
+    rank_evidence,
+    run_evidence_comparison,
+)
 from .identifiability import (
     IdentifiabilityResult,
     analyze_local_identifiability,
@@ -33,9 +44,13 @@ __all__ = [
     "GJ411_STELLAR_CONFIGURATION",
     "DEFAULT_PERCENTILE_PROBABILITIES",
     "EvidenceEstimate",
+    "EvidenceRanking",
     "InferenceConfiguration",
     "IdentifiabilityResult",
     "ModelComparison",
+    "ModelEvidenceRun",
+    "ModelHypothesis",
+    "ModelSelectionResult",
     "ReconstructionSamples",
     "SpectrumData",
     "TruncatedNormalParameter",
@@ -44,10 +59,13 @@ __all__ = [
     "summarize_nuts",
     "summarize_parameters",
     "weighted_quantile",
+    "make_reversal_comparison_configurations",
     "evaluate_reconstruction_samples",
     "posterior_percentile_bands",
     "summarize_integrated_flux",
     "compare_evidence",
+    "rank_evidence",
+    "run_evidence_comparison",
     "analyze_local_identifiability",
     "prior_standard_deviation",
 ]

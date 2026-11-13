@@ -30,6 +30,7 @@ from lyapy.inference.reconstruction import (
     summarize_integrated_flux,
 )
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
+from lyapy.likelihoods import gaussian_log_likelihood
 from tests._legacy_reference import PARAMETERS, evaluate_gj411_legacy_case
 
 
@@ -70,6 +71,32 @@ def test_shared_configuration_assembles_and_transforms_parameters(
         rtol=0.0,
         atol=0.0,
     )
+
+
+def test_configuration_supports_model_specific_parameter_schema():
+    configuration = InferenceConfiguration(
+        base_parameters=(0.0, 2.0, 5.0),
+        free_parameters=(UniformParameter("width", 1, 0.5, 4.0),),
+        parameter_names=("center", "width", "amplitude"),
+    )
+
+    np.testing.assert_allclose(configuration.assemble_numpy([3.0]), [0.0, 3.0, 5.0])
+    assert configuration.parameter_names == ("center", "width", "amplitude")
+
+
+def test_configuration_validates_model_specific_parameter_schema():
+    with pytest.raises(ValueError, match="matching lengths"):
+        InferenceConfiguration(
+            base_parameters=(0.0,),
+            free_parameters=(UniformParameter("center", 0, -1.0, 1.0),),
+            parameter_names=("center", "width"),
+        )
+    with pytest.raises(ValueError, match="does not match"):
+        InferenceConfiguration(
+            base_parameters=(0.0,),
+            free_parameters=(UniformParameter("width", 0, -1.0, 1.0),),
+            parameter_names=("center",),
+        )
 
 
 def test_stellar_configuration_selects_identifiability_block():
@@ -165,6 +192,28 @@ def test_truth_has_higher_likelihood_than_offset_parameters(synthetic_problem):
         prior_transform(np.ones(configuration.ndim)),
         [parameter.upper for parameter in configuration.free_parameters],
     )
+
+
+def test_dynesty_adapter_accepts_hypothesis_specific_model_and_likelihood(
+    synthetic_problem,
+):
+    data, configuration, truth = synthetic_problem
+
+    def alternate_forward_model(wavelength, parameters, kernel):
+        return evaluate_voigt_lya_model_jax(wavelength, parameters, kernel)
+
+    def shifted_likelihood(observed, model, error):
+        return gaussian_log_likelihood(observed, model, error) + 2.5
+
+    baseline, _ = build_dynesty_functions(data, configuration)
+    alternate, _ = build_dynesty_functions(
+        data,
+        configuration,
+        forward_model=alternate_forward_model,
+        likelihood_function=shifted_likelihood,
+    )
+
+    np.testing.assert_allclose(alternate(truth), baseline(truth) + 2.5)
 
 
 def test_numpyro_nuts_smoke_run(synthetic_problem):

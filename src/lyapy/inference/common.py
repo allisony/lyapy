@@ -33,14 +33,10 @@ class UniformParameter:
     upper: float
 
     def __post_init__(self):
-        if not 0 <= self.index < len(PARAMETER_NAMES):
-            raise ValueError(
-                f"parameter index {self.index} is outside the model vector"
-            )
-        if self.name != PARAMETER_NAMES[self.index]:
-            raise ValueError(
-                f"parameter {self.name!r} does not match index {self.index}"
-            )
+        if not self.name:
+            raise ValueError("parameter name must not be empty")
+        if self.index < 0:
+            raise ValueError("parameter index must be non-negative")
         if self.lower >= self.upper:
             raise ValueError(
                 f"invalid bounds for {self.name}: {self.lower}, {self.upper}"
@@ -96,11 +92,16 @@ class InferenceConfiguration:
 
     base_parameters: tuple[float, ...]
     free_parameters: tuple[UniformParameter | TruncatedNormalParameter, ...]
+    parameter_names: tuple[str, ...] = PARAMETER_NAMES
 
     def __post_init__(self):
-        if len(self.base_parameters) != len(PARAMETER_NAMES):
+        if not self.parameter_names or len(self.parameter_names) != len(
+            set(self.parameter_names)
+        ):
+            raise ValueError("parameter_names must be non-empty and unique")
+        if len(self.base_parameters) != len(self.parameter_names):
             raise ValueError(
-                f"base_parameters must contain {len(PARAMETER_NAMES)} values"
+                "base_parameters and parameter_names must have matching lengths"
             )
         if not self.free_parameters:
             raise ValueError("at least one free parameter is required")
@@ -108,6 +109,16 @@ class InferenceConfiguration:
         names = [parameter.name for parameter in self.free_parameters]
         if len(indices) != len(set(indices)) or len(names) != len(set(names)):
             raise ValueError("free parameter names and indices must be unique")
+        for parameter in self.free_parameters:
+            if parameter.index >= len(self.parameter_names):
+                raise ValueError(
+                    f"parameter index {parameter.index} is outside the model vector"
+                )
+            if parameter.name != self.parameter_names[parameter.index]:
+                raise ValueError(
+                    f"parameter {parameter.name!r} does not match index "
+                    f"{parameter.index}"
+                )
 
     @property
     def ndim(self):
@@ -225,3 +236,39 @@ GJ411_STELLAR_CONFIGURATION = InferenceConfiguration(
         }
     ),
 )
+
+
+def make_reversal_comparison_configurations(
+    configuration,
+    reversal_lower=0.0,
+    reversal_upper=1.8,
+):
+    """Return matched free-reversal and zero-reversal configurations."""
+    if reversal_lower < 0.0:
+        raise ValueError("reversal depth cannot be negative")
+    reversal_parameter = UniformParameter(
+        "reversal_depth",
+        11,
+        reversal_lower,
+        reversal_upper,
+    )
+    common_parameters = tuple(
+        parameter
+        for parameter in configuration.free_parameters
+        if parameter.name != "reversal_depth"
+    )
+    if len(common_parameters) == len(configuration.free_parameters):
+        raise ValueError("configuration must vary reversal_depth")
+    self_reversed = InferenceConfiguration(
+        base_parameters=configuration.base_parameters,
+        free_parameters=common_parameters + (reversal_parameter,),
+        parameter_names=configuration.parameter_names,
+    )
+    no_reversal_base = list(configuration.base_parameters)
+    no_reversal_base[11] = 0.0
+    no_reversal = InferenceConfiguration(
+        base_parameters=tuple(no_reversal_base),
+        free_parameters=common_parameters,
+        parameter_names=configuration.parameter_names,
+    )
+    return self_reversed, no_reversal
