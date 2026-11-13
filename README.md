@@ -401,6 +401,28 @@ key or an `AtomicTransition`, for example
 Phenomenological stellar-emission models use the wavelengths but do not use
 the oscillator strengths or atomic damping rates as fitted profile widths.
 
+Catalog transitions can also be composed directly into differentiable ISM
+models. Reuse parameter indices when transitions share the same absorbing
+column, Doppler `b`, and velocity, as for the N V resonance doublet:
+
+```python
+from lyapy.jax_components import (
+    AtomicTransitionAbsorber,
+    CompositeAbsorptionModel,
+)
+
+nv_absorption = CompositeAbsorptionModel((
+    AtomicTransitionAbsorber("n_v_1238", 0, 1, 2),
+    AtomicTransitionAbsorber("n_v_1242", 0, 1, 2),
+))
+```
+
+Here parameters 0, 1, and 2 are log column density, Doppler `b`, and velocity.
+Sharing is always explicit. In particular, C II 1334 arises from the ground
+fine-structure level while C II* 1335 arises from an excited level, so they
+normally need separate column-density parameters even if their kinematics are
+tied.
+
 The historical absorption names `mg2_h` and `mg2_k` were reversed: the former
 evaluated the 2796-A k line and the latter the 2803-A h line. They remain as
 deprecated aliases so old calculations are reproducible. New code should use
