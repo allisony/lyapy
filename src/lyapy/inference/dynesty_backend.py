@@ -36,6 +36,9 @@ def run_dynesty(
     dlogz=0.01,
     random_state=None,
     print_progress=True,
+    bound="multi",
+    sample="auto",
+    bootstrap=None,
 ):
     """Run static nested sampling and return the dynesty sampler."""
     from dynesty import NestedSampler
@@ -47,6 +50,9 @@ def run_dynesty(
         configuration.ndim,
         nlive=nlive,
         rstate=random_state,
+        bound=bound,
+        sample=sample,
+        bootstrap=bootstrap,
     )
     sampler.run_nested(dlogz=dlogz, print_progress=print_progress)
     return sampler

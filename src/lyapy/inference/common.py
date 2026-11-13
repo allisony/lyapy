@@ -209,3 +209,19 @@ GJ411_CONFIGURATION = InferenceConfiguration(
         UniformParameter("reversal_depth", 11, 1.0, 1.8),
     ),
 )
+
+GJ411_STELLAR_CONFIGURATION = InferenceConfiguration(
+    base_parameters=GJ411_CONFIGURATION.base_parameters,
+    free_parameters=tuple(
+        parameter
+        for parameter in GJ411_CONFIGURATION.free_parameters
+        if parameter.name
+        in {
+            "stellar_velocity",
+            "log_amplitude",
+            "lorentz_fwhm",
+            "gaussian_fwhm",
+            "reversal_depth",
+        }
+    ),
+)

@@ -56,6 +56,7 @@ def run_nuts(
     progress_bar=True,
     target_accept_probability=0.8,
     chain_method="parallel",
+    dense_mass=False,
 ):
     """Run NUTS initialized at the configuration's baseline values.
 
@@ -70,6 +71,7 @@ def run_nuts(
         numpyro_spectrum_model,
         init_strategy=init_to_value(values=initial_values),
         target_accept_prob=target_accept_probability,
+        dense_mass=dense_mass,
     )
     sampler = MCMC(
         kernel,

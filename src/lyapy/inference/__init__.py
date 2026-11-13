@@ -2,6 +2,7 @@
 
 from .common import (
     GJ411_CONFIGURATION,
+    GJ411_STELLAR_CONFIGURATION,
     InferenceConfiguration,
     SpectrumData,
     TruncatedNormalParameter,
@@ -22,6 +23,7 @@ from .identifiability import (
 
 __all__ = [
     "GJ411_CONFIGURATION",
+    "GJ411_STELLAR_CONFIGURATION",
     "EvidenceEstimate",
     "InferenceConfiguration",
     "IdentifiabilityResult",

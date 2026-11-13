@@ -11,6 +11,7 @@ pytest.importorskip("dynesty")
 from numpyro.infer.util import log_density
 
 from lyapy.inference.common import (
+    GJ411_STELLAR_CONFIGURATION,
     InferenceConfiguration,
     SpectrumData,
     TruncatedNormalParameter,
@@ -63,6 +64,19 @@ def test_shared_configuration_assembles_and_transforms_parameters(
         full_parameters,
         rtol=0.0,
         atol=0.0,
+    )
+
+
+def test_stellar_configuration_selects_identifiability_block():
+    assert tuple(
+        parameter.name
+        for parameter in GJ411_STELLAR_CONFIGURATION.free_parameters
+    ) == (
+        "stellar_velocity",
+        "log_amplitude",
+        "lorentz_fwhm",
+        "gaussian_fwhm",
+        "reversal_depth",
     )
 
 
@@ -157,6 +171,7 @@ def test_numpyro_nuts_smoke_run(synthetic_problem):
         num_warmup=20,
         num_samples=20,
         progress_bar=False,
+        dense_mass=True,
     )
     samples = sampler.get_samples()
 
@@ -185,6 +200,8 @@ def test_dynesty_smoke_run(synthetic_problem):
         dlogz=10.0,
         random_state=np.random.default_rng(23),
         print_progress=False,
+        sample="rwalk",
+        bootstrap=0,
     )
 
     assert sampler.results.samples.shape[1] == configuration.ndim
