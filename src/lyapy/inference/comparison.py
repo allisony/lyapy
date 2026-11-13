@@ -94,6 +94,8 @@ class ModelHypothesis:
             result["likelihood_specification"] = (
                 self.likelihood_function.as_dict()
             )
+        if hasattr(self.forward_model, "as_dict"):
+            result["forward_model_specification"] = self.forward_model.as_dict()
         return result
 
 

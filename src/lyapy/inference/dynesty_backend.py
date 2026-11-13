@@ -7,6 +7,10 @@ import numpy as np
 from lyapy.jax_models import evaluate_voigt_lya_model_jax
 from lyapy.likelihoods import gaussian_log_likelihood
 from lyapy.inference.noise import evaluate_numpy_log_likelihood
+from lyapy.inference.joint import (
+    JointSpectrumData,
+    evaluate_joint_numpy_log_likelihoods,
+)
 
 
 def build_dynesty_functions(
@@ -16,21 +20,37 @@ def build_dynesty_functions(
     likelihood_function=gaussian_log_likelihood,
 ):
     """Return dynesty-compatible likelihood and prior-transform callables."""
-    wave = jnp.asarray(data.wavelength)
-    observed = np.asarray(data.flux)
-    error = np.asarray(data.error)
-    kernel = jnp.asarray(data.convolution_kernel)
+    is_joint = isinstance(data, JointSpectrumData)
+    if not is_joint:
+        wave = jnp.asarray(data.wavelength)
+        observed = np.asarray(data.flux)
+        error = np.asarray(data.error)
+        kernel = jnp.asarray(data.convolution_kernel)
 
     @jax.jit
     def predict(free_values):
         full_parameters = configuration.assemble_jax(free_values)
+        if is_joint:
+            return forward_model.predict(data, full_parameters)
         return forward_model(
             wave, full_parameters, kernel
         ).convolved.observed
 
     def log_likelihood(free_values):
-        model_flux = np.asarray(predict(jnp.asarray(free_values)))
+        prediction = predict(jnp.asarray(free_values))
         full_parameters = configuration.assemble_numpy(free_values)
+        if is_joint:
+            return float(
+                sum(
+                    evaluate_joint_numpy_log_likelihoods(
+                        likelihood_function,
+                        data,
+                        tuple(np.asarray(value) for value in prediction),
+                        full_parameters,
+                    )
+                )
+            )
+        model_flux = np.asarray(prediction)
         return evaluate_numpy_log_likelihood(
             likelihood_function,
             observed,

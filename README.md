@@ -234,3 +234,55 @@ and sampler settings. The comparison deliberately does not add an LSF-centroid
 parameter: for one spectrum that shift is degenerate with wavelength
 calibration and the stellar/ISM velocity parameters, and should instead be
 handled by an explicitly constrained wavelength-calibration model.
+
+## Joint fits to multiple spectral lines
+
+`JointSpectrumData` and `JointForwardModel` allow any number of named spectra
+to share one ordered parameter vector. Each spectrum may use a different
+wavelength grid, detector LSF, emission/absorption model, number of pixels, and
+likelihood. Shared quantities such as stellar velocity appear once in the
+`InferenceConfiguration`; line-specific fluxes, widths, continua, and noise
+terms occupy their own indices. Both dynesty and NumPyro sum the normalized
+per-spectrum log likelihoods, so the same joint hypothesis also works with the
+evidence-comparison framework.
+
+```python
+from lyapy.inference.joint import (
+    JointForwardModel,
+    JointSpectrumData,
+    NamedForwardModel,
+    NamedSpectrumData,
+)
+
+data = JointSpectrumData((
+    NamedSpectrumData("Ly alpha", lya_data),
+    NamedSpectrumData("Si III", si3_data),
+))
+forward_model = JointForwardModel((
+    NamedForwardModel("Ly alpha", lya_forward_model),
+    NamedForwardModel("Si III", si3_forward_model),
+))
+
+sampler = run_nuts(
+    data,
+    shared_configuration,
+    rng_key,
+    forward_model=forward_model,
+)
+```
+
+`JointLikelihood` can assign, for example, a Gaussian likelihood to one line
+and a Student-t likelihood to another. Names are checked across the data,
+forward models, likelihoods, serialized reports, and NumPyro prediction sites
+to prevent spectra from being silently paired in the wrong order.
+
+Run the synthetic two-line recovery check with:
+
+```bash
+python tools/run_joint_line_validation.py --no-progress
+```
+
+This validation shares stellar velocity between synthetic Ly-alpha and Si III
+while fitting separate fluxes and widths. It demonstrates inference mechanics,
+not a recommended physical Si III prescription. Scientific component catalogs
+and curated priors for Si III, N V, O V, C II, and Mg II remain separate work.
