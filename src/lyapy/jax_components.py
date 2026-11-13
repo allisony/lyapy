@@ -9,7 +9,9 @@ from lyapy.jax_models import (
     KM_SPEED_OF_LIGHT,
     hydrogen_deuterium_transmission_jax,
     normalized_voigt_profile_jax,
+    transition_optical_depth_jax,
 )
+from lyapy.atomic_data import get_atomic_transition
 
 
 class IntrinsicSpectrumResult(NamedTuple):
@@ -216,6 +218,40 @@ class HydrogenDeuteriumAbsorber:
             parameters[self.h1_velocity_index],
             deuterium_to_hydrogen,
         )
+
+
+@dataclass(frozen=True)
+class AtomicTransitionAbsorber:
+    """One catalog or user-defined atomic ISM absorption transition."""
+
+    transition: object
+    log_column_index: int
+    doppler_b_index: int
+    velocity_index: int
+
+    def __post_init__(self):
+        transition = get_atomic_transition(self.transition)
+        if not transition.has_absorption_data:
+            raise ValueError(
+                f"transition {transition.key!r} has no absorption data"
+            )
+        object.__setattr__(self, "transition", transition)
+        for index, name in (
+            (self.log_column_index, "log_column_index"),
+            (self.doppler_b_index, "doppler_b_index"),
+            (self.velocity_index, "velocity_index"),
+        ):
+            _validate_index(index, name)
+
+    def transmission(self, wavelength, parameters):
+        optical_depth = transition_optical_depth_jax(
+            wavelength,
+            parameters[self.log_column_index],
+            parameters[self.velocity_index],
+            parameters[self.doppler_b_index],
+            self.transition,
+        )
+        return jnp.exp(-optical_depth)
 
 
 @dataclass(frozen=True)

@@ -13,6 +13,7 @@ from lyapy.inference.common import (
 )
 from lyapy.inference.dynesty_backend import build_dynesty_functions
 from lyapy.jax_components import (
+    AtomicTransitionAbsorber,
     CompositeAbsorptionModel,
     CompositeEmissionModel,
     GaussianEmissionComponent,
@@ -176,6 +177,77 @@ def test_multiple_ism_components_multiply_their_transmissions():
         * second.transmission(wavelength, parameters),
     )
     assert result.component_transmissions.shape == (2, wavelength.size)
+
+
+def test_atomic_transition_absorber_matches_catalog_optical_depth():
+    wavelength = jnp.linspace(1238.3, 1239.3, 1001)
+    parameters = jnp.array([14.2, 11.0, -7.0])
+    absorber = AtomicTransitionAbsorber("n_v_1238", 0, 1, 2)
+
+    actual = absorber.transmission(wavelength, parameters)
+    optical_depth = line_optical_depth_jax(
+        wavelength,
+        log_column=parameters[0],
+        velocity=parameters[2],
+        doppler_b=parameters[1],
+        rest_wavelength=1238.821,
+        oscillator_strength=1.560e-1,
+        damping_rate=3.391e8,
+    )
+
+    np.testing.assert_array_equal(actual, jnp.exp(-optical_depth))
+    assert absorber.transition.key == "n_v_1238"
+
+
+def test_atomic_doublet_can_share_column_density_b_and_velocity():
+    wavelength = jnp.linspace(1237.5, 1244.0, 6501)
+    parameters = jnp.array([14.2, 11.0, -7.0])
+    stronger = AtomicTransitionAbsorber("n_v_1238", 0, 1, 2)
+    weaker = AtomicTransitionAbsorber("n_v_1242", 0, 1, 2)
+    model = CompositeAbsorptionModel((stronger, weaker))
+
+    result = model.evaluate(wavelength, parameters)
+
+    np.testing.assert_allclose(
+        result.transmission,
+        stronger.transmission(wavelength, parameters)
+        * weaker.transmission(wavelength, parameters),
+        rtol=2e-15,
+        atol=0.0,
+    )
+    assert result.component_transmissions.shape == (2, wavelength.size)
+
+
+def test_atomic_absorber_allows_independent_cii_and_cii_star_columns():
+    wavelength = jnp.linspace(1333.8, 1336.4, 2601)
+    parameters = jnp.array([14.0, 13.2, 8.0, 3.0])
+    ground_state = AtomicTransitionAbsorber("c_ii_1334", 0, 2, 3)
+    excited_state = AtomicTransitionAbsorber("c_ii_1335b", 1, 2, 3)
+    model = CompositeAbsorptionModel((ground_state, excited_state))
+
+    result = model.evaluate(wavelength, parameters)
+
+    assert np.min(result.component_transmissions[0]) < 0.1
+    assert np.min(result.component_transmissions[1]) > np.min(
+        result.component_transmissions[0]
+    )
+
+
+def test_atomic_absorber_is_differentiable_and_validates_metadata():
+    wavelength = jnp.linspace(1238.5, 1239.1, 601)
+    parameters = jnp.array([14.0, 12.0, 2.0])
+    absorber = AtomicTransitionAbsorber("n_v_1238", 0, 1, 2)
+
+    gradient = jax.grad(
+        lambda values: jnp.sum(absorber.transmission(wavelength, values))
+    )(parameters)
+
+    assert np.all(np.isfinite(gradient))
+    assert np.all(np.abs(gradient) > 0.0)
+    with pytest.raises(ValueError, match="unknown atomic transition"):
+        AtomicTransitionAbsorber("missing", 0, 1, 2)
+    with pytest.raises(ValueError, match="log_column_index"):
+        AtomicTransitionAbsorber("n_v_1238", -1, 1, 2)
 
 
 def test_ism_detector_prediction_converges_with_oversampling():
