@@ -12,3 +12,4 @@ dist/
 inference_validation*.json
 model_comparison*.json
 identifiability*.json
+stellar_recovery*.json
