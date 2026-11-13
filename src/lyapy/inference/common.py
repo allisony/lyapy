@@ -1,6 +1,7 @@
 """Shared data and parameter definitions for inference backends."""
 
 from dataclasses import dataclass
+import math
 
 import jax.numpy as jnp
 import numpy as np
@@ -155,6 +156,100 @@ class InferenceConfiguration:
                 for parameter, value in zip(self.free_parameters, unit_values)
             ],
             dtype=np.float64,
+        )
+
+
+class InferenceConfigurationBuilder:
+    """Build an indexed parameter vector without hand-counting indices.
+
+    The builder assigns each parameter the next available index and returns
+    that index for use by forward-model components. Sharing remains explicit:
+    call :meth:`index` to reuse an existing parameter in another component.
+    No prior ranges or initial values are selected automatically.
+    """
+
+    def __init__(self):
+        self._parameter_names = []
+        self._base_parameters = []
+        self._free_parameters = []
+
+    @property
+    def parameter_names(self):
+        return tuple(self._parameter_names)
+
+    def _validated_initial(self, name, initial):
+        if not name:
+            raise ValueError("parameter name must not be empty")
+        if name in self._parameter_names:
+            raise ValueError(f"parameter {name!r} is already defined")
+        initial = float(initial)
+        if not math.isfinite(initial):
+            raise ValueError(f"initial value for {name!r} must be finite")
+        return initial
+
+    def _append(self, name, initial, parameter=None):
+        index = len(self._parameter_names)
+        self._parameter_names.append(name)
+        self._base_parameters.append(initial)
+        if parameter is not None:
+            self._free_parameters.append(parameter)
+        return index
+
+    def add_fixed(self, name, initial):
+        """Add a fixed parameter and return its model-vector index."""
+        initial = self._validated_initial(name, initial)
+        return self._append(name, initial)
+
+    def add_uniform(self, name, initial, lower, upper):
+        """Add a free uniform parameter and return its model-vector index."""
+        initial = self._validated_initial(name, initial)
+        index = len(self._parameter_names)
+        parameter = UniformParameter(name, index, lower, upper)
+        if not parameter.lower <= initial <= parameter.upper:
+            raise ValueError(
+                f"initial value for {name!r} must lie within its bounds"
+            )
+        return self._append(name, initial, parameter)
+
+    def add_truncated_normal(
+        self,
+        name,
+        initial,
+        lower,
+        upper,
+        mean,
+        standard_deviation,
+    ):
+        """Add a free truncated-normal parameter and return its index."""
+        initial = self._validated_initial(name, initial)
+        index = len(self._parameter_names)
+        parameter = TruncatedNormalParameter(
+            name,
+            index,
+            lower,
+            upper,
+            mean,
+            standard_deviation,
+        )
+        if not parameter.lower <= initial <= parameter.upper:
+            raise ValueError(
+                f"initial value for {name!r} must lie within its bounds"
+            )
+        return self._append(name, initial, parameter)
+
+    def index(self, name):
+        """Return an existing index for explicit cross-component sharing."""
+        try:
+            return self._parameter_names.index(name)
+        except ValueError as error:
+            raise KeyError(f"unknown parameter {name!r}") from error
+
+    def build(self):
+        """Return an immutable inference-configuration snapshot."""
+        return InferenceConfiguration(
+            base_parameters=tuple(self._base_parameters),
+            free_parameters=tuple(self._free_parameters),
+            parameter_names=tuple(self._parameter_names),
         )
 
 
