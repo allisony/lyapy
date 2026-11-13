@@ -26,6 +26,14 @@ from .comparison import (
     rank_evidence,
     run_evidence_comparison,
 )
+from .composable import (
+    COMPOSABLE_GJ411_BASE_PARAMETERS,
+    COMPOSABLE_GJ411_PARAMETER_NAMES,
+    GJ411_COMPOSABLE_CONFIGURATION,
+    ComposableInferenceProblem,
+    build_gj411_composable_forward_model,
+    load_gj411_composable_problem,
+)
 from .identifiability import (
     IdentifiabilityResult,
     analyze_local_identifiability,
@@ -41,11 +49,15 @@ from .reconstruction import (
 
 __all__ = [
     "GJ411_CONFIGURATION",
+    "GJ411_COMPOSABLE_CONFIGURATION",
     "GJ411_STELLAR_CONFIGURATION",
+    "COMPOSABLE_GJ411_BASE_PARAMETERS",
+    "COMPOSABLE_GJ411_PARAMETER_NAMES",
     "DEFAULT_PERCENTILE_PROBABILITIES",
     "EvidenceEstimate",
     "EvidenceRanking",
     "InferenceConfiguration",
+    "ComposableInferenceProblem",
     "IdentifiabilityResult",
     "ModelComparison",
     "ModelEvidenceRun",
@@ -68,4 +80,6 @@ __all__ = [
     "run_evidence_comparison",
     "analyze_local_identifiability",
     "prior_standard_deviation",
+    "build_gj411_composable_forward_model",
+    "load_gj411_composable_problem",
 ]
