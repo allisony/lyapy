@@ -118,6 +118,35 @@ piece at a time. Run its non-scientific mechanics check with:
 python tools/example_inference_workflow.py --quick --no-progress
 ```
 
+Several complete problems can be compared through the same interface. Model
+comparison always uses dynesty because NUTS does not estimate the evidence:
+
+```python
+from lyapy.inference import compare_inference_problems
+
+comparison = compare_inference_problems(
+    (single_gaussian_problem, single_voigt_problem, reversed_voigt_problem),
+    random_seed=93,
+    nlive=500,
+    dlogz=0.05,
+)
+
+print(comparison.best_model)
+print(comparison.ranking)
+best_result = comparison.get_result(comparison.best_model)
+pair = comparison.compare("single_voigt", "single_gaussian")
+manifest_path, result_paths = comparison.save("stellar_model_comparison")
+```
+
+Every named problem may have different parameters, priors, forward model, and
+likelihood, but all must contain identical observed spectra. Each candidate's
+full `InferenceResult` is retained, so parameter summaries, prediction bands,
+intrinsic profiles, integrated fluxes, and evidence can be inspected after
+ranking. Saving writes one portable result per model plus a comparison
+manifest; `load_inference_comparison` restores the collection. Lyapy validates
+the mechanics but does not decide which hypotheses or priors are scientifically
+appropriate.
+
 ### Curated stellar-model catalog
 
 The catalog intentionally provides a small number of interpretable starting

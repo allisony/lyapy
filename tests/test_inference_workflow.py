@@ -21,6 +21,8 @@ from lyapy.inference import (
     NamedSpectrumData,
     SpectrumData,
     UniformParameter,
+    compare_inference_problems,
+    load_inference_comparison,
     load_inference_result,
 )
 
@@ -151,6 +153,26 @@ def dynesty_result(joint_problem):
     )
 
 
+@pytest.fixture(scope="module")
+def comparison_result(single_problem):
+    wide_model = GaussianLineModel(0, center=0.0, width=0.7)
+    wide_problem = InferenceProblem(
+        single_problem.data,
+        single_problem.configuration,
+        wide_model,
+        name="wide Gaussian",
+    )
+    return single_problem.compare(
+        wide_problem,
+        random_seed=29,
+        progress=False,
+        nlive=20,
+        dlogz=10.0,
+        sample="rwalk",
+        bootstrap=0,
+    )
+
+
 def test_problem_records_a_reproducible_specification(single_problem):
     specification = single_problem.as_dict()
 
@@ -244,4 +266,76 @@ def test_joint_problem_requires_a_predict_method(joint_problem):
             joint_problem.data,
             joint_problem.configuration,
             GaussianLineModel(0, center=0.0, width=0.3),
+        )
+
+
+def test_problem_comparison_returns_ranked_portable_results(comparison_result):
+    comparison = comparison_result
+
+    assert len(comparison.runs) == 2
+    assert {item.model for item in comparison.ranking} == {
+        "synthetic Gaussian",
+        "wide Gaussian",
+    }
+    assert comparison.ranking[0].rank == 1
+    assert comparison.best_model in {
+        "synthetic Gaussian",
+        "wide Gaussian",
+    }
+    narrow = comparison.get_result("synthetic Gaussian")
+    assert narrow.backend == "dynesty"
+    assert narrow.predictions["spectrum"].shape[0] == narrow.draws
+    pair = comparison.compare("synthetic Gaussian", "wide Gaussian")
+    assert pair.numerator.model == "synthetic Gaussian"
+    assert pair.denominator.model == "wide Gaussian"
+    assert np.isfinite(pair.delta_log_evidence)
+
+
+def test_problem_comparison_round_trip(comparison_result, tmp_path):
+    manifest_path, result_paths = comparison_result.save(
+        tmp_path / "comparison"
+    )
+
+    assert manifest_path.name == "comparison.json"
+    assert set(result_paths) == {"synthetic Gaussian", "wide Gaussian"}
+    assert all(
+        json_path.exists() and arrays_path.exists()
+        for json_path, arrays_path in result_paths.values()
+    )
+    loaded = load_inference_comparison(tmp_path / "comparison")
+    assert loaded.as_dict() == comparison_result.as_dict()
+    for run in comparison_result.runs:
+        np.testing.assert_allclose(
+            loaded.get_result(run.result.name).samples,
+            run.result.samples,
+        )
+
+
+def test_problem_comparison_requires_unique_names_and_identical_data(
+    single_problem,
+):
+    with pytest.raises(ValueError, match="at least two"):
+        compare_inference_problems((single_problem,), progress=False)
+    with pytest.raises(ValueError, match="names must be unique"):
+        compare_inference_problems(
+            (single_problem, single_problem),
+            progress=False,
+        )
+
+    changed_data = SpectrumData(
+        single_problem.data.wavelength,
+        single_problem.data.flux + 0.01,
+        single_problem.data.error,
+        single_problem.data.convolution_kernel,
+    )
+    changed_problem = InferenceProblem(
+        changed_data,
+        single_problem.configuration,
+        single_problem.forward_model,
+        name="changed data",
+    )
+    with pytest.raises(ValueError, match="identical observations"):
+        compare_inference_problems(
+            (single_problem, changed_problem),
+            progress=False,
         )

@@ -73,8 +73,12 @@ from .reconstruction import (
     summarize_integrated_flux,
 )
 from .workflow import (
+    InferenceComparisonResult,
+    InferenceComparisonRun,
     InferenceProblem,
     InferenceResult,
+    compare_inference_problems,
+    load_inference_comparison,
     load_inference_result,
     run_inference,
 )
@@ -91,6 +95,8 @@ __all__ = [
     "EvidenceRanking",
     "InferenceConfiguration",
     "InferenceConfigurationBuilder",
+    "InferenceComparisonResult",
+    "InferenceComparisonRun",
     "InferenceProblem",
     "InferenceResult",
     "ComposableInferenceProblem",
@@ -121,6 +127,7 @@ __all__ = [
     "posterior_percentile_bands",
     "summarize_integrated_flux",
     "compare_evidence",
+    "compare_inference_problems",
     "rank_evidence",
     "run_evidence_comparison",
     "run_inference",
@@ -130,6 +137,7 @@ __all__ = [
     "build_gj411_observation_operator",
     "build_gj411_model_catalog",
     "load_gj411_composable_problem",
+    "load_inference_comparison",
     "load_inference_result",
     "make_model_catalog_entry",
     "augment_configuration_with_noise",

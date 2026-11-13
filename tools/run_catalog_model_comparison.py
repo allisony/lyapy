@@ -22,33 +22,15 @@ import numpy as np
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
-from lyapy.inference.comparison import run_evidence_comparison
+from lyapy.inference import InferenceProblem, compare_inference_problems
 from lyapy.inference.composable import load_gj411_composable_problem
-from lyapy.inference.diagnostics import summarize_dynesty
 from lyapy.inference.model_catalog import build_gj411_model_catalog
 
 
-def posterior_mean(sampler):
-    weights = np.exp(sampler.results.logwt - sampler.results.logz[-1])
-    weights /= np.sum(weights)
-    return np.average(sampler.results.samples, axis=0, weights=weights)
-
-
-def predict(data, entry, free_values):
-    parameters = entry.configuration.assemble_jax(free_values)
-    return np.asarray(
-        entry.forward_model(
-            data.wavelength,
-            parameters,
-            data.convolution_kernel,
-        ).convolved.observed
-    )
-
-
-def fit_summary(data, entry, free_values):
-    model_flux = predict(data, entry, free_values)
+def fit_summary(data, result):
+    model_flux = result.prediction_bands(probabilities=(0.5,))[0]
     residuals = (data.flux - model_flux) / data.error
-    degrees_of_freedom = data.wavelength.size - entry.configuration.ndim
+    degrees_of_freedom = data.wavelength.size - len(result.parameter_names)
     chi_squared = np.sum(residuals**2)
     return {
         "chi_squared": float(chi_squared),
@@ -80,8 +62,8 @@ def make_plot(data, entries, selection):
     colors = plt.get_cmap("tab10").colors
     line_styles = ("-", "--", "-.", ":")
     for index, entry in enumerate(entries):
-        run = selection.get_run(entry.name)
-        model_flux = predict(data, entry, posterior_mean(run.sampler))
+        result = selection.get_result(entry.name)
+        model_flux = result.prediction_bands(probabilities=(0.5,))[0]
         style = line_styles[index % len(line_styles)]
         color = colors[index % len(colors)]
         profile_axis.plot(
@@ -168,27 +150,31 @@ def main():
             f"unknown catalog model(s): {', '.join(missing)}; choices: {choices}"
         )
     entries = tuple(catalog[name] for name in arguments.models)
-    selection = run_evidence_comparison(
-        problem.data,
-        tuple(entry.hypothesis() for entry in entries),
+    problems = tuple(
+        InferenceProblem(
+            problem.data,
+            entry.configuration,
+            entry.forward_model,
+            name=entry.name,
+        )
+        for entry in entries
+    )
+    selection = compare_inference_problems(
+        problems,
         random_seed=arguments.seed,
+        progress=not arguments.no_progress,
         nlive=arguments.nlive,
         dlogz=arguments.dlogz,
-        print_progress=not arguments.no_progress,
         sample=arguments.dynesty_sample,
         bootstrap=0,
     )
     model_reports = {}
     for entry in entries:
-        run = selection.get_run(entry.name)
-        names = tuple(
-            parameter.name for parameter in entry.configuration.free_parameters
-        )
-        mean = posterior_mean(run.sampler)
+        result = selection.get_result(entry.name)
         model_reports[entry.name] = {
             "catalog": entry.as_dict(),
-            "posterior": summarize_dynesty(run.sampler, names),
-            "fit": fit_summary(problem.data, entry, mean),
+            "posterior": result.diagnostics,
+            "fit": fit_summary(problem.data, result),
         }
     report = {
         "problem": "observed GJ 411 curated stellar-model comparison",
@@ -211,14 +197,17 @@ def main():
     prefix = arguments.output_prefix
     plot_path = prefix.with_suffix(".png")
     report_path = prefix.with_suffix(".json")
+    comparison_directory = prefix.with_name(f"{prefix.name}_results")
     prefix.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(plot_path, dpi=180, bbox_inches="tight")
     plt.close(figure)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    manifest_path, _ = selection.save(comparison_directory)
 
     print(json.dumps(report["model_selection"]["ranking"], indent=2))
     print(f"Wrote {plot_path.resolve()}")
     print(f"Wrote {report_path.resolve()}")
+    print(f"Wrote portable results to {manifest_path.resolve()}")
 
 
 if __name__ == "__main__":

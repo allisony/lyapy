@@ -1,16 +1,22 @@
 """High-level inference problems, backend-neutral results, and persistence."""
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import json
 import math
 from pathlib import Path
+from time import perf_counter
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from lyapy.inference.common import InferenceConfiguration, SpectrumData
-from lyapy.inference.comparison import ModelHypothesis
+from lyapy.inference.comparison import (
+    EvidenceEstimate,
+    ModelHypothesis,
+    compare_evidence,
+    rank_evidence,
+)
 from lyapy.inference.diagnostics import (
     summarize_dynesty,
     summarize_nuts,
@@ -32,6 +38,7 @@ from lyapy.likelihoods import gaussian_log_likelihood
 
 
 RESULT_SCHEMA_VERSION = 1
+COMPARISON_SCHEMA_VERSION = 1
 
 
 def _spectrum_specification(data):
@@ -130,6 +137,25 @@ class InferenceProblem:
             reconstruct=reconstruct,
             reconstruction_batch_size=reconstruction_batch_size,
             **backend_options,
+        )
+
+    def compare(
+        self,
+        *alternatives,
+        random_seed=0,
+        progress=True,
+        reconstruct=True,
+        reconstruction_batch_size=None,
+        **dynesty_options,
+    ):
+        """Compare this problem with alternatives using Bayesian evidence."""
+        return compare_inference_problems(
+            (self, *alternatives),
+            random_seed=random_seed,
+            progress=progress,
+            reconstruct=reconstruct,
+            reconstruction_batch_size=reconstruction_batch_size,
+            **dynesty_options,
         )
 
 
@@ -330,6 +356,75 @@ def run_inference(
         predictions=predictions,
         reconstructions=reconstructions,
     )
+
+
+def _same_observations(first, second):
+    first_observations = _observation_mapping(first)
+    second_observations = _observation_mapping(second)
+    if tuple(first_observations) != tuple(second_observations):
+        return False
+    for name, first_data in first_observations.items():
+        second_data = second_observations[name]
+        if not all(
+            np.array_equal(
+                getattr(first_data, array_name),
+                getattr(second_data, array_name),
+            )
+            for array_name in (
+                "wavelength",
+                "flux",
+                "error",
+                "convolution_kernel",
+            )
+        ):
+            return False
+    return True
+
+
+def compare_inference_problems(
+    problems,
+    *,
+    random_seed=0,
+    progress=True,
+    reconstruct=True,
+    reconstruction_batch_size=None,
+    **dynesty_options,
+):
+    """Run dynesty for two or more matched problems and rank their evidence."""
+    problems = tuple(problems)
+    if len(problems) < 2:
+        raise ValueError("at least two inference problems are required")
+    if not all(isinstance(problem, InferenceProblem) for problem in problems):
+        raise TypeError("problems must contain InferenceProblem values")
+    names = [problem.name for problem in problems]
+    if len(names) != len(set(names)):
+        raise ValueError("inference problem names must be unique")
+    reference = problems[0]
+    if not all(
+        _same_observations(reference, problem)
+        for problem in problems[1:]
+    ):
+        raise ValueError("all inference problems must use identical observations")
+
+    runs = []
+    for index, problem in enumerate(problems):
+        start = perf_counter()
+        result = run_inference(
+            problem,
+            "dynesty",
+            random_seed=random_seed + index,
+            progress=progress,
+            reconstruct=reconstruct,
+            reconstruction_batch_size=reconstruction_batch_size,
+            **dynesty_options,
+        )
+        runs.append(
+            InferenceComparisonRun(
+                result=result,
+                runtime_seconds=perf_counter() - start,
+            )
+        )
+    return InferenceComparisonResult(tuple(runs))
 
 
 @dataclass(frozen=True)
@@ -574,6 +669,114 @@ class InferenceResult:
         return json_path, arrays_path
 
 
+@dataclass(frozen=True)
+class InferenceComparisonRun:
+    """One standardized dynesty result and its elapsed runtime."""
+
+    result: InferenceResult
+    runtime_seconds: float
+
+    def __post_init__(self):
+        if not isinstance(self.result, InferenceResult):
+            raise TypeError("result must be an InferenceResult")
+        if self.result.backend != "dynesty":
+            raise ValueError("model comparison requires dynesty results")
+        if (
+            not math.isfinite(self.runtime_seconds)
+            or self.runtime_seconds < 0.0
+        ):
+            raise ValueError("runtime_seconds must be finite and non-negative")
+
+    @property
+    def evidence(self):
+        return EvidenceEstimate(
+            self.result.name,
+            self.result.log_evidence,
+            self.result.log_evidence_error,
+        )
+
+
+@dataclass(frozen=True)
+class InferenceComparisonResult:
+    """Portable posterior products and evidence ranking for several models."""
+
+    runs: tuple[InferenceComparisonRun, ...]
+
+    def __post_init__(self):
+        runs = tuple(self.runs)
+        if len(runs) < 2:
+            raise ValueError("at least two comparison runs are required")
+        if not all(isinstance(run, InferenceComparisonRun) for run in runs):
+            raise TypeError("runs must contain InferenceComparisonRun values")
+        names = [run.result.name for run in runs]
+        if len(names) != len(set(names)):
+            raise ValueError("comparison result names must be unique")
+        object.__setattr__(self, "runs", runs)
+
+    @property
+    def ranking(self):
+        """Return models ordered from highest to lowest evidence."""
+        return rank_evidence(run.evidence for run in self.runs)
+
+    @property
+    def best_model(self):
+        return self.ranking[0].model
+
+    def get_result(self, model):
+        """Return the standardized inference result for one named model."""
+        for run in self.runs:
+            if run.result.name == model:
+                return run.result
+        raise KeyError(model)
+
+    def compare(self, numerator, denominator):
+        """Return the evidence difference for two named models."""
+        estimates = {run.result.name: run.evidence for run in self.runs}
+        try:
+            return compare_evidence(
+                estimates[numerator],
+                estimates[denominator],
+            )
+        except KeyError as error:
+            raise KeyError(f"unknown model {error.args[0]!r}") from error
+
+    def as_dict(self):
+        """Return JSON-compatible rankings and per-model result metadata."""
+        return {
+            "schema_version": COMPARISON_SCHEMA_VERSION,
+            "best_model": self.best_model,
+            "ranking": [asdict(item) for item in self.ranking],
+            "models": {
+                run.result.name: {
+                    "runtime_seconds": run.runtime_seconds,
+                    "result": run.result.as_dict(),
+                }
+                for run in self.runs
+            },
+        }
+
+    def save(self, directory):
+        """Save a comparison manifest plus every model's portable result."""
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        metadata = self.as_dict()
+        result_paths = {}
+        for index, run in enumerate(self.runs):
+            json_path, arrays_path = run.result.save(
+                directory / f"model_{index}"
+            )
+            result_paths[run.result.name] = (json_path, arrays_path)
+            metadata["models"][run.result.name]["result_file"] = (
+                json_path.name
+            )
+        manifest_path = directory / "comparison.json"
+        manifest_path.write_text(
+            json.dumps(_json_compatible(metadata), indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return manifest_path, result_paths
+
+
 def _json_compatible(value):
     if isinstance(value, dict):
         return {str(key): _json_compatible(item) for key, item in value.items()}
@@ -641,3 +844,30 @@ def load_inference_result(path):
         predictions=predictions,
         reconstructions=reconstructions,
     )
+
+
+def load_inference_comparison(path):
+    """Load a comparison written by :meth:`InferenceComparisonResult.save`."""
+    manifest_path = Path(path)
+    if manifest_path.suffix != ".json":
+        manifest_path = manifest_path / "comparison.json"
+    metadata = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if metadata.get("schema_version") != COMPARISON_SCHEMA_VERSION:
+        raise ValueError("unsupported inference-comparison schema version")
+    runs = []
+    for name, model in metadata["models"].items():
+        result = load_inference_result(
+            manifest_path.parent / model["result_file"]
+        )
+        if result.name != name:
+            raise ValueError("comparison manifest and result names must match")
+        runs.append(
+            InferenceComparisonRun(
+                result=result,
+                runtime_seconds=model["runtime_seconds"],
+            )
+        )
+    comparison = InferenceComparisonResult(tuple(runs))
+    if comparison.best_model != metadata["best_model"]:
+        raise ValueError("comparison manifest contains an inconsistent ranking")
+    return comparison
