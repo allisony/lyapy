@@ -21,6 +21,7 @@ from lyapy.inference.reconstruction import (
     ReconstructionEvaluator,
     evaluate_reconstruction_samples,
 )
+from lyapy.inference.workflow import InferenceProblem
 
 
 @pytest.fixture(scope="module")
@@ -52,6 +53,8 @@ def test_composable_problem_has_matched_data_configuration_and_model(
     assert result.convolved.observed.shape == problem.data.wavelength.shape
     assert result.model_wavelength.size > problem.data.wavelength.size
     assert np.all(np.isfinite(result.convolved.observed))
+    assert isinstance(problem, InferenceProblem)
+    assert problem.name == "GJ 411 composable"
 
 
 def test_generic_reversal_configurations_support_composable_schema():

@@ -10,6 +10,7 @@ from lyapy.inference.common import (
     SpectrumData,
     UniformParameter,
 )
+from lyapy.inference.workflow import InferenceProblem
 from lyapy.jax_components import (
     CompositeAbsorptionModel,
     CompositeEmissionModel,
@@ -68,8 +69,8 @@ GJ411_COMPOSABLE_CONFIGURATION = InferenceConfiguration(
 
 
 @dataclass(frozen=True)
-class ComposableInferenceProblem:
-    """Data, parameter configuration, and matched callable forward model."""
+class ComposableInferenceProblem(InferenceProblem):
+    """High-level inference problem with a composable forward model."""
 
     data: SpectrumData
     configuration: InferenceConfiguration
@@ -144,4 +145,9 @@ def load_gj411_composable_problem(
         oversample=oversample,
         model_padding=model_padding,
     )
-    return ComposableInferenceProblem(data, configuration, forward_model)
+    return ComposableInferenceProblem(
+        data,
+        configuration,
+        forward_model,
+        name="GJ 411 composable",
+    )

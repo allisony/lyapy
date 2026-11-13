@@ -59,6 +59,65 @@ operations, untruncated H I/D I absorption, a direct intrinsic-total-flux
 parameter, and the detector-bin integration operator. It records the complete
 model and prior specification alongside the evidence results.
 
+### High-level inference workflow
+
+`InferenceProblem` keeps the data, parameter configuration, forward model, and
+likelihood together. The same problem can be run with NUTS or dynesty, and both
+backends return an `InferenceResult` with the same posterior-sample,
+detector-prediction, summary, and persistence interface:
+
+```python
+from lyapy.inference import InferenceProblem, load_inference_result
+
+problem = InferenceProblem(
+    data,
+    configuration,
+    forward_model,
+    name="single Voigt fit",
+)
+
+nuts_result = problem.run(
+    "nuts",
+    random_seed=17,
+    num_warmup=500,
+    num_samples=1000,
+)
+dynesty_result = problem.run(
+    "dynesty",
+    random_seed=17,
+    nlive=500,
+    dlogz=0.05,
+)
+
+print(nuts_result.parameter_summary())
+print(dynesty_result.log_evidence)
+print(nuts_result.prediction_bands())
+
+json_path, arrays_path = nuts_result.save("single_voigt_fit")
+restored_result = load_inference_result(json_path)
+```
+
+The saved JSON contains readable metadata, diagnostics, and the complete model
+and prior specification. Numerical arrays are stored separately in compressed
+NPZ format and are loaded with pickling disabled. Detector-space posterior
+predictions are always available. Intrinsic profiles and integrated-flux
+summaries are included when the forward model exposes those physical products;
+set `reconstruct=False` to skip them. Dynesty results include normalized
+posterior weights and evidence, while NUTS results do not claim an evidence
+estimate. `JointSpectrumData` and `JointForwardModel` use this same workflow for
+joint fits of multiple lines.
+
+The fully commented
+[`tools/example_inference_workflow.py`](tools/example_inference_workflow.py)
+tutorial constructs the data container, parameter vector and priors, Voigt
+emission, self-reversal, H I/D I absorption, high-resolution STIS operator,
+inference problem, sampler settings, saved result, and diagnostic figure one
+piece at a time. Run its non-scientific mechanics check with:
+
+```bash
+python tools/example_inference_workflow.py --quick --no-progress
+```
+
 ### Curated stellar-model catalog
 
 The catalog intentionally provides a small number of interpretable starting
