@@ -8,7 +8,7 @@ from run_stellar_recovery import main, normalized_dynesty_weights
 from lyapy.inference.common import GJ411_CONFIGURATION, SpectrumData
 from lyapy.inference.reconstruction import (
     DEFAULT_PERCENTILE_PROBABILITIES,
-    evaluate_reconstruction_samples,
+    ReconstructionEvaluator,
     posterior_percentile_bands,
     summarize_integrated_flux,
 )
@@ -208,16 +208,9 @@ def write_reconstruction_products(
     )
     dynesty_values = np.asarray(nested.results.samples)
     dynesty_weights = normalized_dynesty_weights(nested)
-    nuts_reconstruction = evaluate_reconstruction_samples(
-        data,
-        configuration,
-        nuts_values,
-    )
-    dynesty_reconstruction = evaluate_reconstruction_samples(
-        data,
-        configuration,
-        dynesty_values,
-    )
+    evaluator = ReconstructionEvaluator(data, configuration)
+    nuts_reconstruction = evaluator.evaluate(nuts_values)
+    dynesty_reconstruction = evaluator.evaluate(dynesty_values)
     probabilities = np.asarray(DEFAULT_PERCENTILE_PROBABILITIES)
     figure, bands = make_reconstruction_figure(
         data,
