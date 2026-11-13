@@ -46,6 +46,23 @@ def flux_conserving_binning_matrix(high_resolution_edges, detector_edges):
     return matrix
 
 
+def flux_conserving_binning_weights(high_resolution_edges, detector_edges):
+    """Compress detector-bin overlaps into padded indices and weights."""
+    matrix = flux_conserving_binning_matrix(
+        high_resolution_edges,
+        detector_edges,
+    )
+    counts = np.count_nonzero(matrix, axis=1)
+    maximum_count = int(np.max(counts))
+    indices = np.zeros((matrix.shape[0], maximum_count), dtype=np.int32)
+    weights = np.zeros((matrix.shape[0], maximum_count), dtype=np.float64)
+    for row_index, row in enumerate(matrix):
+        nonzero = np.flatnonzero(row)
+        indices[row_index, : nonzero.size] = nonzero
+        weights[row_index, : nonzero.size] = row[nonzero]
+    return indices, weights
+
+
 @dataclass(frozen=True)
 class HighResolutionObservationOperator:
     """Static linear operator from a high-resolution model to detector bins."""
@@ -54,7 +71,8 @@ class HighResolutionObservationOperator:
     cell_edges: np.ndarray
     convolution_kernel: np.ndarray
     detector_edges: np.ndarray
-    binning_matrix: np.ndarray
+    binning_indices: np.ndarray
+    binning_weights: np.ndarray
     oversample: int
     kernel_offsets: np.ndarray
     lsf_offsets: np.ndarray
@@ -62,6 +80,19 @@ class HighResolutionObservationOperator:
     model_padding: float
     ln_lsf_width_scale_index: int | None = None
     lsf_width_scale_bounds: tuple[float, float] = (1.0, 1.0)
+
+    @property
+    def binning_matrix(self):
+        """Materialize the legacy dense matrix for diagnostics only."""
+        matrix = np.zeros(
+            (self.detector_edges.size - 1, self.wavelength.size),
+            dtype=np.float64,
+        )
+        for row, (indices, weights) in enumerate(
+            zip(self.binning_indices, self.binning_weights)
+        ):
+            np.add.at(matrix[row], indices, weights)
+        return matrix
 
     def effective_lsf_kernel(self, parameters=None):
         """Return the normalized fixed or parameter-scaled LSF kernel."""
@@ -89,7 +120,11 @@ class HighResolutionObservationOperator:
             self.effective_lsf_kernel(parameters),
             mode="same",
         )
-        detector_flux = jnp.asarray(self.binning_matrix) @ convolved
+        detector_flux = jnp.sum(
+            convolved[jnp.asarray(self.binning_indices)]
+            * jnp.asarray(self.binning_weights),
+            axis=1,
+        )
         return convolved, detector_flux
 
 
@@ -150,13 +185,17 @@ def build_high_resolution_operator(
     kernel_offsets = spacing * np.arange(-kernel_radius, kernel_radius + 1)
     kernel = np.interp(kernel_offsets, offsets, profile, left=0.0, right=0.0)
     kernel = kernel / np.sum(kernel)
-    matrix = flux_conserving_binning_matrix(high_edges, detector_edges_array)
+    binning_indices, binning_weights = flux_conserving_binning_weights(
+        high_edges,
+        detector_edges_array,
+    )
     return HighResolutionObservationOperator(
         wavelength=wavelength,
         cell_edges=high_edges,
         convolution_kernel=kernel,
         detector_edges=detector_edges_array,
-        binning_matrix=matrix,
+        binning_indices=binning_indices,
+        binning_weights=binning_weights,
         oversample=oversample,
         kernel_offsets=kernel_offsets,
         lsf_offsets=offsets,

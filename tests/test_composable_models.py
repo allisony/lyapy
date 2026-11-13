@@ -232,6 +232,35 @@ def test_detector_edges_and_operator_preserve_constant_flux_density():
     np.testing.assert_allclose(detector_flux, 3.2, rtol=0.0, atol=2e-14)
 
 
+def test_indexed_detector_binning_matches_dense_matrix_with_less_storage():
+    centers = np.linspace(1214.5, 1216.5, 101)
+    offsets, lsf = gaussian_lsf()
+    operator = build_high_resolution_operator(
+        centers,
+        offsets,
+        lsf,
+        oversample=8,
+        model_padding=0.5,
+    )
+    high_resolution_flux = jnp.sin(operator.wavelength * 17.0) + 2.0
+
+    convolved, indexed = operator.apply(high_resolution_flux)
+    dense_matrix = operator.binning_matrix
+    dense = dense_matrix @ np.asarray(convolved)
+
+    np.testing.assert_allclose(indexed, dense, rtol=2e-15, atol=2e-15)
+    np.testing.assert_allclose(
+        np.sum(operator.binning_weights, axis=1),
+        1.0,
+        rtol=0.0,
+        atol=1e-12,
+    )
+    indexed_bytes = (
+        operator.binning_indices.nbytes + operator.binning_weights.nbytes
+    )
+    assert indexed_bytes < dense_matrix.nbytes / 50
+
+
 def make_binned_gaussian(oversample):
     centers = np.linspace(1214.5, 1216.5, 101)
     offsets, lsf = gaussian_lsf()
