@@ -60,7 +60,10 @@ from .model_catalog import (
     make_model_catalog_entry,
 )
 from .lsf import augment_configuration_with_lsf_width
-from .additive import augment_configuration_with_background_and_airglow
+from .additive import (
+    augment_configuration_with_affine_baseline,
+    augment_configuration_with_background_and_airglow,
+)
 from .joint import (
     JointForwardModel,
     JointLikelihood,
@@ -123,6 +126,15 @@ from .averaging import (
     plot_model_average,
     posterior_model_probabilities,
 )
+from .multiline import (
+    CII_SPECTRUM_NAME,
+    LYA_SPECTRUM_NAME,
+    LyaCiiModelBundle,
+    LyaCiiModelDefaults,
+    build_lya_cii_configuration,
+    build_lya_cii_model_bundle,
+    prepare_e140m_lya_cii_data,
+)
 from .prior import (
     PriorBoundaryDiagnostic,
     PriorPredictiveResult,
@@ -156,6 +168,10 @@ __all__ = [
     "InferenceComparisonRun",
     "InferenceProblem",
     "InferenceResult",
+    "CII_SPECTRUM_NAME",
+    "LYA_SPECTRUM_NAME",
+    "LyaCiiModelBundle",
+    "LyaCiiModelDefaults",
     "ComposableInferenceProblem",
     "IdentifiabilityResult",
     "JointForwardModel",
@@ -220,6 +236,8 @@ __all__ = [
     "build_stis_observation_operator",
     "build_gj411_model_catalog",
     "build_lya_model_catalog",
+    "build_lya_cii_configuration",
+    "build_lya_cii_model_bundle",
     "build_stis_target_model_catalog",
     "catalog_defaults_for_target",
     "load_e140m_target_data",
@@ -233,6 +251,7 @@ __all__ = [
     "model_average",
     "plot_model_average",
     "posterior_model_probabilities",
+    "prepare_e140m_lya_cii_data",
     "plot_prior_predictive",
     "plot_prior_sensitivity",
     "run_prior_sensitivity",
@@ -241,6 +260,7 @@ __all__ = [
     "with_prior_bounds",
     "augment_configuration_with_noise",
     "augment_configuration_with_lsf_width",
+    "augment_configuration_with_affine_baseline",
     "augment_configuration_with_background_and_airglow",
     "evaluate_jax_log_likelihood",
     "evaluate_numpy_log_likelihood",

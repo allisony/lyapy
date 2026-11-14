@@ -946,9 +946,7 @@ def load_stis_target_observation(target):
     """Load a packaged spectrum using one reviewed target specification."""
     if not isinstance(target, StisTargetSpecification):
         raise TypeError("target must be a StisTargetSpecification")
-    package = resources.files("lyapy")
-    with resources.as_file(package.joinpath(target.spectrum_resource)) as path:
-        spectrum = load_idl_spectrum(path, name=target.name)
+    spectrum = load_stis_target_spectrum(target)
     lsf = load_stis_lsf(
         target.grating,
         target.aperture,
@@ -963,6 +961,24 @@ def load_stis_target_observation(target):
         uncertainty_scale=target.uncertainty_scale,
         excluded_windows=target.excluded_windows,
         metadata=target.as_dict(),
+    )
+
+
+def load_stis_target_spectrum(target):
+    """Load one packaged target without continuum subtraction or cropping."""
+    if not isinstance(target, StisTargetSpecification):
+        raise TypeError("target must be a StisTargetSpecification")
+    package = resources.files("lyapy")
+    with resources.as_file(package.joinpath(target.spectrum_resource)) as path:
+        loaded = load_idl_spectrum(path, name=target.name)
+    return ObservedSpectrum(
+        loaded.wavelength,
+        loaded.flux,
+        loaded.error,
+        name=loaded.name,
+        quality_mask=loaded.quality_mask,
+        metadata=target.as_dict(),
+        data_quality=loaded.data_quality,
     )
 
 

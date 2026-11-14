@@ -25,6 +25,112 @@ def _bounds_contain(name, value, bounds):
     return lower, upper
 
 
+def augment_configuration_with_affine_baseline(
+    configuration,
+    forward_model,
+    *,
+    flux_density_scale,
+    prefix="",
+    baseline_kind="background",
+    reference_wavelength=None,
+    wavelength_scale=1.0,
+    base_intercept=0.0,
+    intercept_bounds=(-5.0, 5.0),
+    include_slope=True,
+    base_slope=0.0,
+    slope_bounds=(-5.0, 5.0),
+):
+    """Append a fitted local baseline with explicit physical ordering.
+
+    ``baseline_kind="background"`` adds an extraction or detector residual
+    after ISM absorption and instrumental convolution. ``"stellar_continuum"``
+    adds the affine component before both operations. The numerical scale has
+    flux-density units and keeps the sampled coefficients near unity.
+    """
+    if not isinstance(configuration, InferenceConfiguration):
+        raise TypeError("configuration must be an InferenceConfiguration")
+    if not hasattr(forward_model, "observation_operator"):
+        raise TypeError("forward_model must define observation_operator")
+    if baseline_kind not in {"background", "stellar_continuum"}:
+        raise ValueError(
+            "baseline_kind must be 'background' or 'stellar_continuum'"
+        )
+    flux_density_scale = float(flux_density_scale)
+    wavelength_scale = float(wavelength_scale)
+    if not math.isfinite(flux_density_scale) or flux_density_scale <= 0.0:
+        raise ValueError("flux_density_scale must be positive and finite")
+    if not math.isfinite(wavelength_scale) or wavelength_scale <= 0.0:
+        raise ValueError("wavelength_scale must be positive and finite")
+    operator = forward_model.observation_operator
+    if reference_wavelength is None:
+        reference_wavelength = float(
+            0.5 * (operator.detector_edges[0] + operator.detector_edges[-1])
+        )
+    reference_wavelength = float(reference_wavelength)
+    if not math.isfinite(reference_wavelength) or reference_wavelength <= 0.0:
+        raise ValueError("reference_wavelength must be positive and finite")
+
+    prefix = str(prefix).strip()
+    stem = f"{prefix}_" if prefix else ""
+    baseline_name = (
+        "background" if baseline_kind == "background" else "continuum"
+    )
+    names = list(configuration.parameter_names)
+    base = list(configuration.base_parameters)
+    free = list(configuration.free_parameters)
+
+    def append(short_name, initial, bounds):
+        name = f"{stem}{baseline_name}_{short_name}"
+        if name in names:
+            raise ValueError(f"configuration already contains {name!r}")
+        initial = float(initial)
+        lower, upper = _bounds_contain(name, initial, bounds)
+        index = len(names)
+        names.append(name)
+        base.append(initial)
+        free.append(UniformParameter(name, index, lower, upper))
+        return index
+
+    intercept_index = append("intercept", base_intercept, intercept_bounds)
+    slope_index = (
+        append("slope", base_slope, slope_bounds)
+        if include_slope
+        else None
+    )
+    component_class = (
+        AffineBackgroundComponent
+        if baseline_kind == "background"
+        else AffineContinuumComponent
+    )
+    component = component_class(
+        reference_wavelength,
+        intercept_index,
+        slope_index,
+        flux_scale=flux_density_scale,
+        wavelength_scale=wavelength_scale,
+    )
+    attribute = (
+        "additive_model"
+        if baseline_kind == "background"
+        else "continuum_model"
+    )
+    existing = getattr(forward_model, attribute, None)
+    if existing is None:
+        combined = CompositeAdditiveModel((component,))
+    elif isinstance(existing, CompositeAdditiveModel):
+        combined = CompositeAdditiveModel((*existing.components, component))
+    else:
+        raise TypeError(
+            f"existing {attribute} must be a CompositeAdditiveModel"
+        )
+    augmented = InferenceConfiguration(
+        base_parameters=tuple(base),
+        free_parameters=tuple(free),
+        parameter_names=tuple(names),
+    )
+    return augmented, replace(forward_model, **{attribute: combined})
+
+
 def augment_configuration_with_background_and_airglow(
     configuration,
     forward_model,

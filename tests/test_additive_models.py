@@ -7,6 +7,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
 from lyapy.inference.additive import (
+    augment_configuration_with_affine_baseline,
     augment_configuration_with_background_and_airglow,
 )
 from lyapy.inference.common import InferenceConfiguration, UniformParameter
@@ -295,6 +296,28 @@ def test_joint_exposures_can_share_one_airglow_width_parameter():
     assert first_airglow.fwhm_index == second_airglow.fwhm_index
     assert len(second_configuration.parameter_names) == (
         len(configuration.parameter_names) + 9
+    )
+
+
+def test_affine_baseline_can_be_added_without_an_airglow_component():
+    _, configuration, model = make_model()
+    augmented, fitted = augment_configuration_with_affine_baseline(
+        configuration,
+        model,
+        flux_density_scale=1e-15,
+        prefix="cii",
+        wavelength_scale=2.0,
+    )
+
+    assert augmented.parameter_names[-2:] == (
+        "cii_background_intercept",
+        "cii_background_slope",
+    )
+    assert fitted.continuum_model is None
+    assert len(fitted.additive_model.components) == 1
+    assert isinstance(
+        fitted.additive_model.components[0],
+        AffineBackgroundComponent,
     )
 
 
