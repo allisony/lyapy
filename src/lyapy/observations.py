@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
+from types import MappingProxyType
 
 import numpy as np
 from scipy.io import readsav
@@ -12,10 +13,246 @@ from .instrument import interpolate_stis_lsf
 
 GJ411_SPECTRUM_RESOURCE = "HD-95735-E140M-odn905010_1.xl_stis"
 GJ729_SPECTRUM_RESOURCE = "GJ729_E140M-1425_020X020_58228.xl_stis"
-STIS_E140M_LSF_RESOURCE = "STIS_E140M_LSF.dat"
+STIS_E140M_LSF_RESOURCE = "data/stis_lsf/LSF_E140M_1200.txt"
+STIS_G140M_LSF_RESOURCE = "data/stis_lsf/LSF_G140M_1200.txt"
+STIS_LSF_SOURCE_URL = (
+    "https://www.stsci.edu/hst/instrumentation/stis/performance/"
+    "spectral-resolution"
+)
 GJ411_CONTINUUM_WINDOWS = ((1212.0, 1213.0), (1217.0, 1217.9))
 GJ411_FIT_WINDOW = (1214.5, 1216.55)
 AYRES_PHOTERR_SCALE = float(np.sqrt(2.0))
+
+
+def _normalized_grating(value):
+    normalized = str(value).strip().upper()
+    for separator in ("-", "/", " "):
+        normalized = normalized.split(separator, 1)[0]
+    return normalized
+
+
+def _normalized_aperture(value):
+    return (
+        str(value)
+        .strip()
+        .lower()
+        .replace("×", "x")
+        .replace('"', "")
+        .replace(" ", "")
+    )
+
+
+@dataclass(frozen=True)
+class StisLsfCalibration:
+    """One tabulated STIS LSF at a reference wavelength."""
+
+    reference_wavelength: float
+    resource: str
+
+    def __post_init__(self):
+        if (
+            not np.isfinite(self.reference_wavelength)
+            or self.reference_wavelength <= 0.0
+        ):
+            raise ValueError("reference_wavelength must be positive and finite")
+        if not self.resource:
+            raise ValueError("resource must not be empty")
+
+    def as_dict(self):
+        return {
+            "reference_wavelength_angstrom": self.reference_wavelength,
+            "resource": self.resource,
+        }
+
+
+@dataclass(frozen=True)
+class StisInstrumentConfiguration:
+    """One STIS grating and its aperture-dependent LSF calibrations."""
+
+    grating: str
+    calibrations: tuple[StisLsfCalibration, ...]
+    aperture_profile_columns: tuple[tuple[str, int], ...]
+    source: str = "STScI STIS spectral-resolution reference tables"
+    source_url: str = STIS_LSF_SOURCE_URL
+
+    def __post_init__(self):
+        grating = _normalized_grating(self.grating)
+        if not grating:
+            raise ValueError("grating must not be empty")
+        calibrations = tuple(self.calibrations)
+        if not calibrations:
+            raise ValueError("calibrations must not be empty")
+        if not all(
+            isinstance(calibration, StisLsfCalibration)
+            for calibration in calibrations
+        ):
+            raise TypeError("calibrations must contain StisLsfCalibration values")
+        wavelengths = [
+            calibration.reference_wavelength for calibration in calibrations
+        ]
+        if len(wavelengths) != len(set(wavelengths)):
+            raise ValueError("calibration reference wavelengths must be unique")
+        columns = tuple(
+            (_normalized_aperture(aperture), int(column))
+            for aperture, column in self.aperture_profile_columns
+        )
+        names = [aperture for aperture, _ in columns]
+        if len(names) != len(set(names)):
+            raise ValueError("aperture names must be unique")
+        if any(column < 1 for _, column in columns):
+            raise ValueError("LSF profile columns must be positive")
+        object.__setattr__(self, "grating", grating)
+        object.__setattr__(
+            self,
+            "calibrations",
+            tuple(sorted(calibrations, key=lambda item: item.reference_wavelength)),
+        )
+        object.__setattr__(self, "aperture_profile_columns", columns)
+
+    @property
+    def reference_wavelength(self):
+        """Lowest tabulated wavelength, retained for API compatibility."""
+        return self.calibrations[0].reference_wavelength
+
+    @property
+    def lsf_resource(self):
+        """Lowest-wavelength resource, retained for API compatibility."""
+        return self.calibrations[0].resource
+
+    @property
+    def apertures(self):
+        return tuple(aperture for aperture, _ in self.aperture_profile_columns)
+
+    def profile_column(self, aperture):
+        normalized = _normalized_aperture(aperture)
+        for name, column in self.aperture_profile_columns:
+            if name == normalized:
+                return column
+        choices = ", ".join(self.apertures) or "none bundled"
+        raise ValueError(
+            f"no bundled {self.grating} LSF for aperture {aperture!r}; "
+            f"available apertures: {choices}"
+        )
+
+    def select_calibration(self, wavelength=None):
+        """Return the tabulation nearest the requested wavelength."""
+        if wavelength is None:
+            return self.calibrations[0]
+        wavelength = float(wavelength)
+        if not np.isfinite(wavelength) or wavelength <= 0.0:
+            raise ValueError("wavelength must be positive and finite")
+        return min(
+            self.calibrations,
+            key=lambda item: abs(item.reference_wavelength - wavelength),
+        )
+
+    def as_dict(self):
+        return {
+            "grating": self.grating,
+            "calibrations": [
+                calibration.as_dict() for calibration in self.calibrations
+            ],
+            "aperture_profile_columns": dict(
+                self.aperture_profile_columns
+            ),
+            "source": self.source,
+            "source_url": self.source_url,
+        }
+
+
+def _calibrations(grating, *reference_wavelengths):
+    return tuple(
+        StisLsfCalibration(
+            float(wavelength),
+            f"data/stis_lsf/LSF_{grating}_{int(wavelength)}.txt",
+        )
+        for wavelength in reference_wavelengths
+    )
+
+
+_FIRST_ORDER_APERTURES = (
+    ("52x0.1", 1),
+    ("52x0.2", 2),
+    ("52x0.5", 3),
+    ("52x2.0", 4),
+)
+_MEDIUM_ECHELLE_APERTURES = (
+    ("0.1x0.03", 1),
+    ("0.2x0.06", 2),
+    ("0.2x0.2", 3),
+    ("6x0.2", 4),
+)
+
+
+_STIS_INSTRUMENT_CONFIGURATIONS = (
+    StisInstrumentConfiguration(
+        "E140M",
+        _calibrations("E140M", 1200, 1500),
+        _MEDIUM_ECHELLE_APERTURES,
+    ),
+    StisInstrumentConfiguration(
+        "G140M",
+        _calibrations("G140M", 1200, 1500),
+        _FIRST_ORDER_APERTURES,
+    ),
+    StisInstrumentConfiguration(
+        "G140L",
+        _calibrations("G140L", 1200, 1500),
+        _FIRST_ORDER_APERTURES,
+    ),
+    StisInstrumentConfiguration(
+        "E140H",
+        _calibrations("E140H", 1200, 1500),
+        (
+            ("0.1x0.03", 1),
+            ("0.2x0.09", 2),
+            ("0.2x0.2", 3),
+            ("6x0.2", 4),
+        ),
+    ),
+    StisInstrumentConfiguration(
+        "E230M",
+        _calibrations("E230M", 1700, 2400),
+        _MEDIUM_ECHELLE_APERTURES,
+    ),
+    StisInstrumentConfiguration(
+        "E230H",
+        _calibrations("E230H", 1700, 2400),
+        (
+            ("0.1x0.03", 1),
+            ("0.1x0.09", 2),
+            ("0.1x0.2", 3),
+            ("6x0.2", 4),
+        ),
+    ),
+    StisInstrumentConfiguration(
+        "G230L",
+        _calibrations("G230L", 1700, 2400),
+        _FIRST_ORDER_APERTURES,
+    ),
+    StisInstrumentConfiguration(
+        "G230M",
+        _calibrations("G230M", 1700, 2400),
+        _FIRST_ORDER_APERTURES,
+    ),
+)
+
+STIS_INSTRUMENT_CONFIGURATIONS = MappingProxyType(
+    {configuration.grating: configuration
+     for configuration in _STIS_INSTRUMENT_CONFIGURATIONS}
+)
+
+
+def get_stis_instrument_configuration(grating):
+    """Resolve a STIS grating, accepting central-wavelength suffixes."""
+    key = _normalized_grating(grating)
+    try:
+        return STIS_INSTRUMENT_CONFIGURATIONS[key]
+    except KeyError as error:
+        choices = ", ".join(STIS_INSTRUMENT_CONFIGURATIONS)
+        raise ValueError(
+            f"unsupported STIS grating {grating!r}; choices: {choices}"
+        ) from error
 
 
 @dataclass(frozen=True)
@@ -31,7 +268,7 @@ class StisTargetSpecification:
     continuum_windows: tuple[tuple[float, float], ...]
     fit_window: tuple[float, float]
     uncertainty_scale: float = 1.0
-    lsf_profile_column: int = 3
+    lsf_profile_column: int | None = None
     excluded_windows: tuple[tuple[float, float], ...] = ()
     program: str = ""
     citation: str = ""
@@ -56,7 +293,7 @@ class StisTargetSpecification:
             raise ValueError("stellar_radial_velocity must be finite")
         if not np.isfinite(self.uncertainty_scale) or self.uncertainty_scale <= 0.0:
             raise ValueError("uncertainty_scale must be positive and finite")
-        if self.lsf_profile_column < 1:
+        if self.lsf_profile_column is not None and self.lsf_profile_column < 1:
             raise ValueError("lsf_profile_column must select a profile column")
         if self.visits is not None and self.visits < 1:
             raise ValueError("visits must be positive or None")
@@ -71,6 +308,15 @@ class StisTargetSpecification:
             raise ValueError("fit_window lower bound must precede upper bound")
 
     def as_dict(self):
+        instrument = get_stis_instrument_configuration(self.grating)
+        calibration = instrument.select_calibration(
+            0.5 * (self.fit_window[0] + self.fit_window[1])
+        )
+        profile_column = (
+            instrument.profile_column(self.aperture)
+            if self.lsf_profile_column is None
+            else self.lsf_profile_column
+        )
         return {
             "name": self.name,
             "spectrum_resource": self.spectrum_resource,
@@ -86,7 +332,11 @@ class StisTargetSpecification:
                 if np.isclose(self.uncertainty_scale, AYRES_PHOTERR_SCALE)
                 else "target specification"
             ),
-            "lsf_profile_column": self.lsf_profile_column,
+            "lsf_profile_column": profile_column,
+            "lsf_resource": calibration.resource,
+            "lsf_reference_wavelength_angstrom": (
+                calibration.reference_wavelength
+            ),
             "excluded_windows": [list(window) for window in self.excluded_windows],
             "program": self.program,
             "citation": self.citation,
@@ -310,6 +560,36 @@ def load_tabulated_lsf(
         raise ValueError("requested LSF column is not present") from error
 
 
+def load_stis_lsf(
+    grating,
+    aperture,
+    *,
+    wavelength=None,
+    profile_column=None,
+    path=None,
+):
+    """Load the nearest bundled or an explicit aperture-specific STIS LSF.
+
+    Table offsets are retained in detector-pixel units. When ``path`` is not
+    supplied, ``wavelength`` selects the nearest tabulated STScI reference
+    wavelength. A user-supplied table overrides the bundled calibration.
+    """
+    configuration = get_stis_instrument_configuration(grating)
+    if profile_column is None:
+        profile_column = configuration.profile_column(aperture)
+    if path is not None:
+        return load_tabulated_lsf(path, profile_column=profile_column)
+    calibration = configuration.select_calibration(wavelength)
+    package = resources.files("lyapy")
+    with resources.as_file(
+        package.joinpath(calibration.resource)
+    ) as resource_path:
+        return load_tabulated_lsf(
+            resource_path,
+            profile_column=profile_column,
+        )
+
+
 def fit_continuum(spectrum, windows, degree=1):
     """Fit a polynomial continuum within open wavelength windows."""
     if degree < 0:
@@ -394,11 +674,12 @@ def load_stis_target_observation(target):
     package = resources.files("lyapy")
     with resources.as_file(package.joinpath(target.spectrum_resource)) as path:
         spectrum = load_idl_spectrum(path, name=target.name)
-    with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
-        lsf = load_tabulated_lsf(
-            path,
-            profile_column=target.lsf_profile_column,
-        )
+    lsf = load_stis_lsf(
+        target.grating,
+        target.aperture,
+        wavelength=0.5 * (target.fit_window[0] + target.fit_window[1]),
+        profile_column=target.lsf_profile_column,
+    )
     return prepare_stis_observation(
         spectrum,
         lsf,

@@ -67,7 +67,12 @@ Issues = "https://github.com/allisony/lyapy/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lyapy = ["*.dat", "*.xl_stis"]
+lyapy = [
+    "*.dat",
+    "*.xl_stis",
+    "data/stis_lsf/*.txt",
+    "data/stis_lsf/README.md",
+]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"

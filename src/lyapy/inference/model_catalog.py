@@ -9,6 +9,7 @@ from lyapy.inference.comparison import ModelHypothesis
 from lyapy.inference.composable import (
     COMPOSABLE_GJ411_BASE_PARAMETERS,
     build_e140m_observation_operator,
+    build_stis_observation_operator,
 )
 from lyapy.jax_components import (
     CompositeAbsorptionModel,
@@ -474,16 +475,42 @@ def build_e140m_target_model_catalog(
     model_padding=1.0,
 ):
     """Return the curated model set adapted to one E140M target."""
+    return build_stis_target_model_catalog(
+        target,
+        wavelength,
+        initial_log_total_flux=initial_log_total_flux,
+        oversample=oversample,
+        model_padding=model_padding,
+    )
+
+
+def build_stis_target_model_catalog(
+    target,
+    wavelength,
+    *,
+    initial_log_total_flux=-11.75,
+    lsf=None,
+    oversample=8,
+    model_padding=1.0,
+):
+    """Return the curated model set with a target-matched STIS operator."""
     defaults = catalog_defaults_for_target(
         target,
         initial_log_total_flux=initial_log_total_flux,
     )
+    operator = build_stis_observation_operator(
+        wavelength,
+        grating=target.grating,
+        aperture=target.aperture,
+        lsf_profile_column=target.lsf_profile_column,
+        lsf=lsf,
+        oversample=oversample,
+        model_padding=model_padding,
+    )
     return build_lya_model_catalog(
         wavelength,
         defaults=defaults,
-        lsf_profile_column=target.lsf_profile_column,
-        oversample=oversample,
-        model_padding=model_padding,
+        observation_operator=operator,
     )
 
 
@@ -492,18 +519,21 @@ def build_lya_model_catalog(
     *,
     defaults,
     lsf_profile_column=3,
+    observation_operator=None,
     oversample=8,
     model_padding=1.0,
 ):
     """Return curated Ly-alpha models for explicit target and LSF defaults."""
     if not isinstance(defaults, LyaCatalogDefaults):
         raise TypeError("defaults must be LyaCatalogDefaults")
-    operator = build_e140m_observation_operator(
-        wavelength,
-        lsf_profile_column=lsf_profile_column,
-        oversample=oversample,
-        model_padding=model_padding,
-    )
+    operator = observation_operator
+    if operator is None:
+        operator = build_e140m_observation_operator(
+            wavelength,
+            lsf_profile_column=lsf_profile_column,
+            oversample=oversample,
+            model_padding=model_padding,
+        )
     entries = (
         _single_gaussian(operator, defaults=defaults),
         _single_voigt(operator, defaults=defaults),

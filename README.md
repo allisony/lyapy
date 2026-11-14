@@ -510,6 +510,71 @@ Lorentz FWHM, Gaussian FWHM, reversal velocity, reversal FWHM, peak reversal
 optical depth, log H I column, H I Doppler b, and H I velocity. LSF offsets must
 be wavelength offsets.
 
+### STIS LSF repository and instrument operators
+
+STIS instrument configuration is selected by grating and aperture rather than
+by a hard-coded E140M column number. Central-wavelength suffixes such as
+`E140M-1425` and `G140M/1222` are accepted. Lyapy bundles the official
+numerical UV LSF tables linked from the
+[STScI spectral-resolution page](https://www.stsci.edu/hst/instrumentation/stis/performance/spectral-resolution)
+as convenient, version-controlled defaults rather than mandatory inputs.
+The repository covers G140L, G140M, E140M, and E140H at 1200 and 1500 Å, plus
+G230L, G230M, E230M, and E230H at 1700 and 2400 Å. Tables at 3200 Å and longer
+are intentionally omitted because they are outside lyapy's ultraviolet scope.
+
+The aperture columns are:
+
+- first-order gratings: `52x0.1`, `52x0.2`, `52x0.5`, and `52x2.0`;
+- medium echelles: `0.1x0.03`, `0.2x0.06`, `0.2x0.2`, and `6x0.2`;
+- high-resolution echelles use the aperture labels in their STScI tables.
+
+```python
+from lyapy import load_stis_lsf
+from lyapy.inference import build_g140m_observation_operator
+
+lsf = load_stis_lsf("G140M-1222", "52x0.2", wavelength=1215.67)
+operator = build_g140m_observation_operator(
+    detector_wavelength,
+    aperture="52x0.2",
+    oversample=8,
+)
+```
+
+The nearest tabulated reference wavelength is selected automatically from the
+detector wavelength grid. The tabulated offsets are in relative detector
+pixels. The operator converts them to wavelength offsets using the median
+dispersion of the supplied local detector grid, evaluates the model on an
+oversampled grid, convolves there, and integrates into the actual detector
+bins. The original E140M wrapper uses this same generic path and preserves the
+reviewed GJ 411/GJ 729 results.
+
+Every builder also accepts an explicit `TabulatedLsf`. This lets a user select
+a newer STScI calibration, a wavelength-specific kernel, or a custom LSF
+without modifying lyapy:
+
+```python
+from lyapy import load_stis_lsf
+from lyapy.inference import build_g140m_observation_operator
+
+updated_lsf = load_stis_lsf(
+    "G140M-1222",
+    "52x0.2",
+    path="new_stis_lsf_table.dat",
+)
+operator = build_g140m_observation_operator(
+    detector_wavelength,
+    aperture="52x0.2",
+    lsf=updated_lsf,
+    oversample=8,
+)
+```
+
+The override loader accepts the same two-header-row format as the bundled
+tables. Aperture column selection is inferred for a standard STScI-format
+table, or can be set explicitly with `profile_column` for a differently
+organized custom file. Supplying an override never modifies the bundled
+calibration.
+
 ### Fitting uncertainty in the STIS LSF width
 
 The tabulated STIS LSF can either remain fixed at its calibrated shape or gain

@@ -13,10 +13,15 @@ from lyapy.inference.composable import build_gj411_observation_operator
 from lyapy.inference.model_catalog import (
     build_e140m_target_model_catalog,
     build_gj411_model_catalog,
+    build_stis_target_model_catalog,
     make_model_catalog_entry,
 )
 from lyapy.jax_components import CompositeEmissionModel, GaussianEmissionComponent
-from lyapy.observations import GJ729_E140M_TARGET, load_gj729_observation
+from lyapy.observations import (
+    GJ729_E140M_TARGET,
+    StisTargetSpecification,
+    load_gj729_observation,
+)
 
 
 @pytest.fixture(scope="module")
@@ -62,6 +67,35 @@ def test_catalog_adapts_velocity_priors_to_another_e140m_target():
         jnp.asarray(single_voigt.base_parameters),
         observation.convolution_kernel,
     ).convolved.observed.shape == observation.wavelength.shape
+
+
+def test_catalog_uses_target_matched_g140m_operator():
+    target = StisTargetSpecification(
+        name="synthetic G140M target",
+        spectrum_resource="not-loaded.fits",
+        grating="G140M-1222",
+        aperture="52x0.2",
+        wavelength_frame="heliocentric",
+        stellar_radial_velocity=-15.0,
+        continuum_windows=((1200.0, 1205.0), (1225.0, 1230.0)),
+        fit_window=(1210.0, 1220.0),
+    )
+    wavelength = np.linspace(1210.0, 1220.0, 51)
+    target_catalog = build_stis_target_model_catalog(
+        target,
+        wavelength,
+        oversample=4,
+        model_padding=0.5,
+    )
+    entry = target_catalog["single_gaussian"]
+    operator = entry.forward_model.observation_operator
+
+    assert operator.convolution_kernel.size > 1
+    assert entry.forward_model(
+        wavelength,
+        jnp.asarray(entry.configuration.base_parameters),
+        np.ones(1),
+    ).convolved.observed.shape == wavelength.shape
 
 
 @pytest.mark.parametrize(

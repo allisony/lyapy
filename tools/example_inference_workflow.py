@@ -17,7 +17,6 @@ sensitivity before interpreting the posterior.
 """
 
 import argparse
-from importlib import resources
 import json
 from pathlib import Path
 import sys
@@ -47,6 +46,7 @@ from lyapy.inference import (  # noqa: E402
     InferenceConfigurationBuilder,
     InferenceProblem,
     SpectrumData,
+    build_stis_observation_operator,
     load_inference_result,
 )
 from lyapy.jax_components import (  # noqa: E402
@@ -57,12 +57,9 @@ from lyapy.jax_components import (  # noqa: E402
     VoigtEmissionComponent,
 )
 from lyapy.jax_composable import ComposableBinnedModel  # noqa: E402
-from lyapy.jax_instrument import build_high_resolution_operator  # noqa: E402
 from lyapy.likelihoods import gaussian_log_likelihood  # noqa: E402
 from lyapy.observations import (  # noqa: E402
-    STIS_E140M_LSF_RESOURCE,
     load_gj411_observation,
-    load_tabulated_lsf,
 )
 
 
@@ -172,23 +169,16 @@ def make_configuration():
 
 def make_forward_model(data, indices, oversample=8, model_padding=1.0):
     """Assemble emission, ISM absorption, and the STIS observation operator."""
-    # The packaged STIS table tabulates the LSF against detector-pixel offset.
-    # The high-resolution operator needs wavelength offsets, so multiply by the
-    # measured Angstrom-per-pixel dispersion of this spectrum.
-    package = resources.files("lyapy")
-    with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
-        tabulated_lsf = load_tabulated_lsf(path)
-    detector_dispersion = float(np.median(np.diff(data.wavelength)))
-    lsf_offsets_angstrom = tabulated_lsf.offset * detector_dispersion
-
     # oversample controls numerical resolution, not a fitted physical
     # parameter. model_padding extends the physical wavelength grid beyond the
     # fitted detector bins so absorption wings and LSF convolution are not
-    # artificially cut off at the displayed window edges.
-    observation_operator = build_high_resolution_operator(
+    # artificially cut off at the displayed window edges. The instrument
+    # builder selects the aperture column and converts relative detector-pixel
+    # LSF offsets to wavelength offsets using this spectrum's local dispersion.
+    observation_operator = build_stis_observation_operator(
         data.wavelength,
-        lsf_offsets_angstrom,
-        tabulated_lsf.profile,
+        grating="E140M-1425",
+        aperture="0.2x0.2",
         oversample=oversample,
         model_padding=model_padding,
     )

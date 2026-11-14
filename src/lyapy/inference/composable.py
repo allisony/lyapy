@@ -1,7 +1,6 @@
 """Reviewed GJ 411 problem using the composable high-resolution model."""
 
 from dataclasses import dataclass
-from importlib import resources
 
 import numpy as np
 
@@ -22,10 +21,11 @@ from lyapy.jax_composable import ComposableBinnedModel
 from lyapy.jax_instrument import build_high_resolution_operator
 from lyapy.observations import (
     GJ411_E140M_TARGET,
-    STIS_E140M_LSF_RESOURCE,
     StisTargetSpecification,
+    TabulatedLsf,
+    get_stis_instrument_configuration,
     load_stis_target_observation,
-    load_tabulated_lsf,
+    load_stis_lsf,
 )
 
 
@@ -124,27 +124,99 @@ def build_gj411_observation_operator(
 def build_e140m_observation_operator(
     wavelength,
     *,
-    lsf_profile_column=3,
+    aperture="0.2x0.2",
+    lsf_profile_column=None,
+    lsf=None,
     oversample=8,
     model_padding=1.0,
 ):
-    """Build an aperture-selected E140M high-resolution operator."""
-    package = resources.files("lyapy")
-    with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
-        lsf = load_tabulated_lsf(path, profile_column=lsf_profile_column)
+    """Build an E140M operator from the bundled or supplied LSF."""
+    return build_stis_observation_operator(
+        wavelength,
+        grating="E140M",
+        aperture=aperture,
+        lsf_profile_column=lsf_profile_column,
+        lsf=lsf,
+        oversample=oversample,
+        model_padding=model_padding,
+    )
+
+
+def build_g140m_observation_operator(
+    wavelength,
+    *,
+    aperture="52x0.2",
+    lsf_profile_column=None,
+    lsf=None,
+    oversample=8,
+    model_padding=1.0,
+):
+    """Build a G140M operator from the bundled or supplied LSF."""
+    return build_stis_observation_operator(
+        wavelength,
+        grating="G140M",
+        aperture=aperture,
+        lsf_profile_column=lsf_profile_column,
+        lsf=lsf,
+        oversample=oversample,
+        model_padding=model_padding,
+    )
+
+
+def build_g140l_observation_operator(
+    wavelength,
+    *,
+    aperture="52x0.2",
+    lsf_profile_column=None,
+    lsf=None,
+    oversample=8,
+    model_padding=1.0,
+):
+    """Build a G140L operator from the bundled or supplied LSF."""
+    return build_stis_observation_operator(
+        wavelength,
+        grating="G140L",
+        aperture=aperture,
+        lsf_profile_column=lsf_profile_column,
+        lsf=lsf,
+        oversample=oversample,
+        model_padding=model_padding,
+    )
+
+
+def build_stis_observation_operator(
+    wavelength,
+    *,
+    grating,
+    aperture,
+    lsf_profile_column=None,
+    lsf=None,
+    oversample=8,
+    model_padding=1.0,
+):
+    """Build a high-resolution operator from a STIS pixel-space LSF."""
+    get_stis_instrument_configuration(grating)
     wavelength = np.asarray(wavelength, dtype=np.float64)
+    if lsf is None:
+        lsf = load_stis_lsf(
+            grating,
+            aperture,
+            wavelength=float(np.median(wavelength)),
+            profile_column=lsf_profile_column,
+        )
+    elif not isinstance(lsf, TabulatedLsf):
+        raise TypeError("lsf must be a TabulatedLsf")
     dispersion = float(np.median(np.diff(wavelength)))
-    operator = build_high_resolution_operator(
+    return build_high_resolution_operator(
         wavelength,
         lsf.offset * dispersion,
         lsf.profile,
         oversample=oversample,
         model_padding=model_padding,
     )
-    return operator
 
 
-def load_e140m_target_data(target):
+def load_stis_target_data(target):
     """Return inference data with target provenance and likelihood mask."""
     if not isinstance(target, StisTargetSpecification):
         raise TypeError("target must be a StisTargetSpecification")
@@ -157,6 +229,11 @@ def load_e140m_target_data(target):
         likelihood_mask=observation.likelihood_mask,
         metadata=observation.metadata,
     )
+
+
+def load_e140m_target_data(target):
+    """Backward-compatible alias for reviewed packaged E140M targets."""
+    return load_stis_target_data(target)
 
 
 def load_gj411_composable_problem(
