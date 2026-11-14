@@ -640,6 +640,11 @@ class InferenceResult:
     def draws(self):
         return self.samples.shape[0]
 
+    @property
+    def spectrum_names(self):
+        """Return named spectra in their stored joint-fit order."""
+        return tuple(self.observations)
+
     def parameter_samples(self):
         """Return posterior values keyed by free-parameter name."""
         return {
@@ -706,6 +711,22 @@ class InferenceResult:
             large_residual_threshold=large_residual_threshold,
         )
 
+    def fit_diagnostics_all(
+        self,
+        *,
+        random_seed=0,
+        large_residual_threshold=3.0,
+    ):
+        """Return noise-aware diagnostics for every named spectrum."""
+        return {
+            name: self.fit_diagnostics(
+                name,
+                random_seed=random_seed + index,
+                large_residual_threshold=large_residual_threshold,
+            )
+            for index, name in enumerate(self.spectrum_names)
+        }
+
     def prior_boundary_diagnostics(
         self,
         *,
@@ -748,6 +769,23 @@ class InferenceResult:
             show_posterior_predictive=show_posterior_predictive,
         )
 
+    def plot_all(
+        self,
+        *,
+        random_seed=0,
+        show_posterior_predictive=True,
+    ):
+        """Create one detector-space fit figure for all joint spectra."""
+        from lyapy.inference.result_diagnostics import (
+            plot_joint_inference_result,
+        )
+
+        return plot_joint_inference_result(
+            self,
+            random_seed=random_seed,
+            show_posterior_predictive=show_posterior_predictive,
+        )
+
     def integrated_flux_summary(
         self,
         spectrum="spectrum",
@@ -765,6 +803,17 @@ class InferenceResult:
             probabilities,
             weights=self.weights,
         )
+
+    def integrated_flux_summaries(
+        self,
+        probabilities=DEFAULT_PERCENTILE_PROBABILITIES,
+    ):
+        """Summarize intrinsic flux for every reconstructed spectrum."""
+        return {
+            name: self.integrated_flux_summary(name, probabilities)
+            for name in self.spectrum_names
+            if name in self.reconstructions
+        }
 
     def as_dict(self):
         """Return metadata and summaries while excluding numerical arrays."""

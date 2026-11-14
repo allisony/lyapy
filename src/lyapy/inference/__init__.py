@@ -86,6 +86,7 @@ from .result_diagnostics import (
     evaluate_fit_diagnostics,
     plot_inference_comparison,
     plot_inference_result,
+    plot_joint_inference_result,
     posterior_predictive_bands,
     posterior_predictive_samples,
 )
@@ -187,6 +188,7 @@ __all__ = [
     "evaluate_fit_diagnostics",
     "plot_inference_comparison",
     "plot_inference_result",
+    "plot_joint_inference_result",
     "posterior_predictive_bands",
     "posterior_predictive_samples",
     "posterior_percentile_bands",

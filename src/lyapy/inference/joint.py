@@ -114,6 +114,16 @@ class JointForwardModel:
     def names(self):
         return tuple(model.name for model in self.models)
 
+    @classmethod
+    def from_mapping(cls, models):
+        """Build named forward models while preserving mapping order."""
+        return cls(
+            tuple(
+                NamedForwardModel(name, forward_model)
+                for name, forward_model in models.items()
+            )
+        )
+
     def predict(self, data, parameters):
         """Return detector-space predictions in joint-data order."""
         if not isinstance(data, JointSpectrumData):
@@ -182,6 +192,16 @@ class JointLikelihood:
             if likelihood.name == name:
                 return likelihood.likelihood_function
         raise KeyError(name)
+
+    @classmethod
+    def from_mapping(cls, likelihoods):
+        """Build named likelihoods while preserving mapping order."""
+        return cls(
+            tuple(
+                NamedLikelihood(name, likelihood_function)
+                for name, likelihood_function in likelihoods.items()
+            )
+        )
 
     def __call__(self, observed, predicted, error, parameters):
         raise TypeError("JointLikelihood must be evaluated with JointSpectrumData")

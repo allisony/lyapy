@@ -214,6 +214,7 @@ def test_dynesty_workflow_reconstructs_each_joint_spectrum(dynesty_result):
     assert result.predictions["line B"].shape == (result.draws, 13)
     flux = result.integrated_flux_summary("line A")
     assert 0.5 <= flux["mean"] <= 1.5
+    assert set(result.integrated_flux_summaries()) == {"line A", "line B"}
 
 
 def test_result_round_trip_uses_json_and_non_pickle_arrays(

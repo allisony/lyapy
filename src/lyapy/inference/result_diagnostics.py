@@ -486,6 +486,116 @@ def plot_inference_result(
     return figure
 
 
+def plot_joint_inference_result(
+    result,
+    *,
+    random_seed=0,
+    show_posterior_predictive=True,
+):
+    """Plot detector-space fits and residuals for every named spectrum."""
+    import matplotlib.pyplot as plt
+
+    names = tuple(result.observations)
+    if len(names) < 2:
+        raise ValueError("joint plotting requires at least two spectra")
+    figure, axes = plt.subplots(
+        len(names),
+        2,
+        figsize=(13.0, 4.0 * len(names)),
+        squeeze=False,
+        gridspec_kw={"width_ratios": (3, 1)},
+        layout="constrained",
+    )
+    for index, (name, (profile_axis, residual_axis)) in enumerate(
+        zip(names, axes)
+    ):
+        diagnostics = evaluate_fit_diagnostics(
+            result,
+            spectrum=name,
+            random_seed=random_seed + index,
+        )
+        observation = result.observations[name]
+        scale, exponent = _flux_display_scale(
+            observation.flux,
+            diagnostics.central_prediction,
+        )
+        included = observation.likelihood_mask
+        profile_axis.errorbar(
+            observation.wavelength[included],
+            observation.flux[included] / scale,
+            yerr=observation.error[included] / scale,
+            color="0.45",
+            linewidth=0.8,
+            label="data (reported errors)",
+        )
+        if np.any(~included):
+            profile_axis.errorbar(
+                observation.wavelength[~included],
+                observation.flux[~included] / scale,
+                yerr=observation.error[~included] / scale,
+                color="tab:red",
+                marker="x",
+                linestyle="none",
+                linewidth=0.8,
+                label="excluded from likelihood",
+            )
+        if show_posterior_predictive:
+            profile_axis.fill_between(
+                observation.wavelength,
+                diagnostics.predictive_bands[0] / scale,
+                diagnostics.predictive_bands[4] / scale,
+                color="0.65",
+                alpha=0.18,
+                label="95% posterior-predictive band",
+            )
+        profile_axis.fill_between(
+            observation.wavelength,
+            diagnostics.latent_bands[0] / scale,
+            diagnostics.latent_bands[4] / scale,
+            color="tab:blue",
+            alpha=0.15,
+            label="95% latent-model band",
+        )
+        profile_axis.fill_between(
+            observation.wavelength,
+            diagnostics.latent_bands[1] / scale,
+            diagnostics.latent_bands[3] / scale,
+            color="tab:blue",
+            alpha=0.3,
+            label="68% latent-model band",
+        )
+        profile_axis.plot(
+            observation.wavelength,
+            diagnostics.central_prediction / scale,
+            color="tab:blue",
+            label="latent posterior median",
+        )
+        profile_axis.set_title(name)
+        profile_axis.set_ylabel(
+            rf"flux density / $10^{{{exponent}}}$"
+        )
+        profile_axis.set_xlabel(r"wavelength ($\AA$)")
+        if index == 0:
+            profile_axis.legend(frameon=False, fontsize="small", ncol=2)
+
+        residual_axis.axhline(0.0, color="0.4", linewidth=1.0)
+        residual_axis.plot(
+            observation.wavelength,
+            np.where(included, diagnostics.scaled_residuals, np.nan),
+            color="tab:blue",
+        )
+        residual_axis.axhline(3.0, color="0.7", linestyle=":")
+        residual_axis.axhline(-3.0, color="0.7", linestyle=":")
+        residual_axis.set_title(f"{name} residuals")
+        residual_axis.set_ylabel("residual / likelihood scale")
+        residual_axis.set_xlabel(r"wavelength ($\AA$)")
+        residual_axis.locator_params(axis="x", nbins=5)
+        for axis in (profile_axis, residual_axis):
+            axis.grid(alpha=0.2)
+    figure.suptitle(f"{result.name}: joint spectral fit")
+    return figure
+
+
 def plot_inference_comparison(
     comparison,
     spectrum="spectrum",

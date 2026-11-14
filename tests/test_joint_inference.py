@@ -10,6 +10,7 @@ jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 pytest.importorskip("numpyro")
+import matplotlib.pyplot as plt
 from numpyro.infer.util import log_density
 
 from lyapy.inference.common import (
@@ -112,6 +113,11 @@ def test_joint_forward_model_handles_different_spectrum_lengths():
         "Si_III",
     )
 
+    mapped = JointForwardModel.from_mapping(
+        {model.name: model.forward_model for model in forward_model.models}
+    )
+    assert mapped.names == forward_model.names
+
 
 def test_joint_dynesty_log_likelihood_is_sum_of_spectrum_likelihoods():
     data, configuration, forward_model = make_joint_problem()
@@ -145,6 +151,15 @@ def test_joint_likelihood_allows_different_noise_models_by_spectrum():
             ),
         )
     )
+    mapped_likelihood = JointLikelihood.from_mapping(
+        {
+            named.name: named.likelihood_function
+            for named in likelihood.likelihoods
+        }
+    )
+    assert tuple(
+        named.name for named in mapped_likelihood.likelihoods
+    ) == data.names
     parameters = np.asarray(configuration.base_parameters)
     predictions = forward_model.predict(data, parameters)
     contributions = evaluate_joint_numpy_log_likelihoods(
@@ -309,3 +324,62 @@ def test_joint_result_diagnostics_use_each_spectrums_noise_model():
     assert lya.likelihood_distribution == "Gaussian"
     assert si3.likelihood_distribution == "StudentT"
     assert si3.central_chi_squared is None
+
+    assert result.spectrum_names == ("Ly alpha", "Si III")
+    diagnostics = result.fit_diagnostics_all(random_seed=67)
+    assert tuple(diagnostics) == result.spectrum_names
+    assert diagnostics["Ly alpha"].as_dict() == lya.as_dict()
+    assert result.integrated_flux_summaries() == {}
+    figure = result.plot_all(random_seed=67)
+    assert len(figure.axes) == 4
+    assert "joint spectral fit" in figure._suptitle.get_text()
+    plt.close(figure)
+
+
+def test_single_spectrum_result_rejects_joint_plot():
+    data, configuration, forward_model = make_joint_problem()
+    observation = data.spectra[0].data
+    samples = np.repeat(
+        np.asarray(configuration.base_parameters)[None, :],
+        3,
+        axis=0,
+    )
+    prediction = np.asarray(
+        forward_model.models[0].forward_model(
+            observation.wavelength,
+            jnp.asarray(configuration.base_parameters),
+            observation.convolution_kernel,
+        ).convolved.observed
+    )
+    result = InferenceResult(
+        name="single",
+        backend="nuts",
+        parameter_names=tuple(
+            parameter.name for parameter in configuration.free_parameters
+        ),
+        samples=samples,
+        weights=None,
+        diagnostics={},
+        problem_specification={
+            "hypothesis": {
+                "base_parameters": list(configuration.base_parameters),
+                "free_parameters": [
+                    {
+                        "name": parameter.name,
+                        "index": parameter.index,
+                    }
+                    for parameter in configuration.free_parameters
+                ],
+                "likelihood_function": (
+                    "lyapy.likelihoods.gaussian_log_likelihood"
+                ),
+            }
+        },
+        observations={"spectrum": observation},
+        predictions={
+            "spectrum": np.repeat(prediction[None, :], 3, axis=0)
+        },
+    )
+
+    with pytest.raises(ValueError, match="at least two"):
+        result.plot_all()

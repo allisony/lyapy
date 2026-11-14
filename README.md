@@ -653,45 +653,57 @@ already-declared shared parameter. Fixed and truncated-normal parameters are
 also supported.
 
 ```python
+from lyapy.inference import InferenceProblem
 from lyapy.inference.joint import (
     JointForwardModel,
     JointSpectrumData,
-    NamedForwardModel,
-    NamedSpectrumData,
 )
 
-data = JointSpectrumData((
-    NamedSpectrumData("Ly alpha", lya_data),
-    NamedSpectrumData("Si III", si3_data),
-))
-forward_model = JointForwardModel((
-    NamedForwardModel("Ly alpha", lya_forward_model),
-    NamedForwardModel("Si III", si3_forward_model),
-))
+data = JointSpectrumData.from_mapping({
+    "Ly alpha": lya_data,
+    "Si III": si3_data,
+})
+forward_model = JointForwardModel.from_mapping({
+    "Ly alpha": lya_forward_model,
+    "Si III": si3_forward_model,
+})
 
-sampler = run_nuts(
+problem = InferenceProblem(
     data,
-    shared_configuration,
-    rng_key,
+    configuration,
     forward_model=forward_model,
+    name="Ly-alpha plus Si III",
 )
+result = problem.run("nuts", random_seed=17)
+print(result.fit_diagnostics_all())
+print(result.integrated_flux_summaries())
+result.plot_all().savefig("joint_fit.png", dpi=180)
+result.save("joint_fit")
 ```
 
 `JointLikelihood` can assign, for example, a Gaussian likelihood to one line
-and a Student-t likelihood to another. Names are checked across the data,
-forward models, likelihoods, serialized reports, and NumPyro prediction sites
-to prevent spectra from being silently paired in the wrong order.
+and a Student-t likelihood to another; its `from_mapping` constructor follows
+the same pattern. Names are checked across the data, forward models,
+likelihoods, serialized reports, and NumPyro prediction sites to prevent spectra
+from being silently paired in the wrong order. `fit_diagnostics_all()` and
+`plot_all()` summarize every line without losing the shared parameter posterior,
+while individual lines remain accessible by name.
 
 Run the synthetic two-line recovery check with:
 
 ```bash
+python tools/run_joint_line_validation.py --quick --no-progress
 python tools/run_joint_line_validation.py --no-progress
 ```
 
 This validation shares stellar velocity between synthetic Ly-alpha and Si III
-while fitting separate fluxes and widths. It demonstrates inference mechanics,
-not a recommended physical Si III prescription. Curated physical priors for
-Si III, N V, O V, C II, and Mg II remain separate work.
+while fitting separate total fluxes and widths. It now uses the standard
+`InferenceProblem` workflow and saves portable posterior arrays, per-line fit
+diagnostics, integrated-flux summaries, and one combined fit/residual figure.
+The quick command verifies mechanics only; it is not a converged recovery run.
+This demonstrates inference mechanics, not a recommended physical Si III
+prescription. Curated physical priors for Si III, N V, O V, C II, and Mg II
+remain separate work.
 
 ### UV spectral-line and multiplet catalog
 
