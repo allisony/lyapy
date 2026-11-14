@@ -21,6 +21,7 @@ from lyapy.jax_composable import ComposableBinnedModel
 from lyapy.jax_instrument import build_high_resolution_operator
 from lyapy.observations import (
     GJ411_E140M_TARGET,
+    ObservedSpectrum,
     StisTargetSpecification,
     TabulatedLsf,
     get_stis_instrument_configuration,
@@ -228,6 +229,82 @@ def load_stis_target_data(target):
         observation.convolution_kernel,
         likelihood_mask=observation.likelihood_mask,
         metadata=observation.metadata,
+    )
+
+
+def prepare_observed_spectrum_data(
+    spectrum,
+    fit_window,
+    *,
+    exclusion_windows=(),
+):
+    """Crop raw flux without subtracting a continuum or airglow model.
+
+    Quality-mask exclusions and optional wavelength exclusions are retained in
+    the likelihood mask. Pixels with non-positive uncertainties remain on the
+    native detector grid, but receive a finite placeholder uncertainty and are
+    excluded from the likelihood. The placeholder never contributes to a fit.
+
+    The convolution-kernel field is set to a unit impulse because composable
+    models carry their high-resolution observation operator explicitly.
+    """
+    if not isinstance(spectrum, ObservedSpectrum):
+        raise TypeError("spectrum must be an ObservedSpectrum")
+    lower, upper = (float(value) for value in fit_window)
+    if not np.isfinite(lower) or not np.isfinite(upper) or lower >= upper:
+        raise ValueError("fit_window bounds must be finite and increasing")
+    fit_mask = (
+        (spectrum.wavelength >= lower)
+        & (spectrum.wavelength <= upper)
+    )
+    if np.count_nonzero(fit_mask) < 2:
+        raise ValueError("fit_window must contain at least two detector pixels")
+    wavelength = spectrum.wavelength[fit_mask]
+    flux = spectrum.flux[fit_mask]
+    error = spectrum.error[fit_mask].copy()
+    likelihood_mask = spectrum.quality_mask[fit_mask] & (error > 0.0)
+    parsed_exclusions = []
+    for window in exclusion_windows:
+        exclusion_lower, exclusion_upper = (float(value) for value in window)
+        if (
+            not np.isfinite(exclusion_lower)
+            or not np.isfinite(exclusion_upper)
+            or exclusion_lower >= exclusion_upper
+        ):
+            raise ValueError(
+                "exclusion-window bounds must be finite and increasing"
+            )
+        likelihood_mask &= ~(
+            (wavelength >= exclusion_lower)
+            & (wavelength <= exclusion_upper)
+        )
+        parsed_exclusions.append((exclusion_lower, exclusion_upper))
+    if not np.any(likelihood_mask):
+        raise ValueError("no usable detector pixels remain in fit_window")
+    invalid_error = error <= 0.0
+    if np.any(invalid_error):
+        error[invalid_error] = float(np.median(error[~invalid_error]))
+    metadata = dict(spectrum.metadata)
+    metadata.update(
+        {
+            "fit_window_angstrom": [lower, upper],
+            "excluded_windows_angstrom": [
+                list(window) for window in parsed_exclusions
+            ],
+            "continuum_subtracted": False,
+            "airglow_subtracted": False,
+            "nonpositive_error_pixels_excluded": int(
+                np.count_nonzero(invalid_error)
+            ),
+        }
+    )
+    return SpectrumData(
+        wavelength,
+        flux,
+        error,
+        np.ones(1, dtype=np.float64),
+        likelihood_mask=likelihood_mask,
+        metadata=metadata,
     )
 
 

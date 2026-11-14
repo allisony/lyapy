@@ -41,6 +41,7 @@ from .composable import (
     load_e140m_target_data,
     load_gj411_composable_problem,
     load_stis_target_data,
+    prepare_observed_spectrum_data,
 )
 from .identifiability import (
     IdentifiabilityResult,
@@ -59,6 +60,7 @@ from .model_catalog import (
     make_model_catalog_entry,
 )
 from .lsf import augment_configuration_with_lsf_width
+from .additive import augment_configuration_with_background_and_airglow
 from .joint import (
     JointForwardModel,
     JointLikelihood,
@@ -223,6 +225,7 @@ __all__ = [
     "load_e140m_target_data",
     "load_gj411_composable_problem",
     "load_stis_target_data",
+    "prepare_observed_spectrum_data",
     "load_inference_comparison",
     "load_inference_result",
     "load_prior_sensitivity",
@@ -238,6 +241,7 @@ __all__ = [
     "with_prior_bounds",
     "augment_configuration_with_noise",
     "augment_configuration_with_lsf_width",
+    "augment_configuration_with_background_and_airglow",
     "evaluate_jax_log_likelihood",
     "evaluate_numpy_log_likelihood",
     "evaluate_numpy_pointwise_log_likelihood",
