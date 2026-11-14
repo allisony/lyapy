@@ -281,15 +281,27 @@ def plot_prior_predictive(result, spectrum="spectrum", *, maximum_curves=30):
     axes = np.atleast_1d(axes)
     detector_axis = axes[0]
     bands = result.prediction_bands(spectrum)
+    included = observation.likelihood_mask
     detector_axis.errorbar(
-        observation.wavelength,
-        observation.flux,
-        yerr=observation.error,
+        observation.wavelength[included],
+        observation.flux[included],
+        yerr=observation.error[included],
         color="black",
         linewidth=0.7,
         alpha=0.65,
         label="observed data",
     )
+    if np.any(~included):
+        detector_axis.errorbar(
+            observation.wavelength[~included],
+            observation.flux[~included],
+            yerr=observation.error[~included],
+            color="tab:red",
+            marker="x",
+            linestyle="none",
+            linewidth=0.7,
+            label="excluded from likelihood",
+        )
     if maximum_curves:
         indices = np.linspace(
             0,

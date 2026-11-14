@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 import re
 
+import jax.numpy as jnp
+
 from lyapy.inference.common import SpectrumData
 from lyapy.inference.noise import (
     evaluate_jax_log_likelihood,
@@ -213,9 +215,9 @@ def evaluate_joint_numpy_log_likelihoods(
     return tuple(
         evaluate_numpy_log_likelihood(
             _likelihood_for(likelihood_function, spectrum.name),
-            spectrum.data.flux,
-            prediction,
-            spectrum.data.error,
+            spectrum.data.flux[spectrum.data.likelihood_indices],
+            prediction[spectrum.data.likelihood_indices],
+            spectrum.data.error[spectrum.data.likelihood_indices],
             parameters,
         )
         for spectrum, prediction in zip(data.spectra, predictions)
@@ -234,9 +236,13 @@ def evaluate_joint_jax_log_likelihoods(
     return tuple(
         evaluate_jax_log_likelihood(
             _likelihood_for(likelihood_function, spectrum.name),
-            spectrum.data.flux,
-            prediction,
-            spectrum.data.error,
+            jnp.asarray(spectrum.data.flux)[
+                spectrum.data.likelihood_indices
+            ],
+            prediction[spectrum.data.likelihood_indices],
+            jnp.asarray(spectrum.data.error)[
+                spectrum.data.likelihood_indices
+            ],
             parameters,
         )
         for spectrum, prediction in zip(data.spectra, predictions)

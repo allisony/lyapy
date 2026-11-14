@@ -11,10 +11,12 @@ import jax.numpy as jnp
 from lyapy.inference.common import InferenceConfiguration, UniformParameter
 from lyapy.inference.composable import build_gj411_observation_operator
 from lyapy.inference.model_catalog import (
+    build_e140m_target_model_catalog,
     build_gj411_model_catalog,
     make_model_catalog_entry,
 )
 from lyapy.jax_components import CompositeEmissionModel, GaussianEmissionComponent
+from lyapy.observations import GJ729_E140M_TARGET, load_gj729_observation
 
 
 @pytest.fixture(scope="module")
@@ -38,6 +40,28 @@ def test_catalog_contains_curated_noncombinatorial_model_set(catalog):
     )
     assert len(catalog) == 6
     assert len({entry.name for entry in catalog.values()}) == len(catalog)
+
+
+def test_catalog_adapts_velocity_priors_to_another_e140m_target():
+    observation = load_gj729_observation()
+    target_catalog = build_e140m_target_model_catalog(
+        GJ729_E140M_TARGET,
+        observation.wavelength,
+        initial_log_total_flux=-11.7,
+        oversample=4,
+        model_padding=0.5,
+    )
+
+    single_voigt = target_catalog["single_voigt"].configuration
+    velocity = single_voigt.free_parameters[0]
+    assert single_voigt.base_parameters[velocity.index] == -11.0
+    assert (velocity.lower, velocity.upper) == (-36.0, 14.0)
+    assert single_voigt.base_parameters[1] == -11.7
+    assert target_catalog["single_voigt"].forward_model(
+        observation.wavelength,
+        jnp.asarray(single_voigt.base_parameters),
+        observation.convolution_kernel,
+    ).convolved.observed.shape == observation.wavelength.shape
 
 
 @pytest.mark.parametrize(

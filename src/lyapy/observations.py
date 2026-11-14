@@ -1,6 +1,6 @@
 """Spectrum loading and deterministic STIS preprocessing."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 
@@ -11,9 +11,148 @@ from .instrument import interpolate_stis_lsf
 
 
 GJ411_SPECTRUM_RESOURCE = "HD-95735-E140M-odn905010_1.xl_stis"
+GJ729_SPECTRUM_RESOURCE = "GJ729_E140M-1425_020X020_58228.xl_stis"
 STIS_E140M_LSF_RESOURCE = "STIS_E140M_LSF.dat"
 GJ411_CONTINUUM_WINDOWS = ((1212.0, 1213.0), (1217.0, 1217.9))
 GJ411_FIT_WINDOW = (1214.5, 1216.55)
+AYRES_PHOTERR_SCALE = float(np.sqrt(2.0))
+
+
+@dataclass(frozen=True)
+class StisTargetSpecification:
+    """Reviewed preprocessing choices for one packaged STIS spectrum."""
+
+    name: str
+    spectrum_resource: str
+    grating: str
+    aperture: str
+    wavelength_frame: str
+    stellar_radial_velocity: float
+    continuum_windows: tuple[tuple[float, float], ...]
+    fit_window: tuple[float, float]
+    uncertainty_scale: float = 1.0
+    lsf_profile_column: int = 3
+    excluded_windows: tuple[tuple[float, float], ...] = ()
+    program: str = ""
+    citation: str = ""
+    citation_url: str = ""
+    reduction_source: str = ""
+    coadded: bool | None = None
+    visits: int | None = None
+    airglow_subtracted: bool | None = None
+    notes: str = ""
+
+    def __post_init__(self):
+        for attribute in (
+            "name",
+            "spectrum_resource",
+            "grating",
+            "aperture",
+            "wavelength_frame",
+        ):
+            if not getattr(self, attribute):
+                raise ValueError(f"{attribute} must not be empty")
+        if not np.isfinite(self.stellar_radial_velocity):
+            raise ValueError("stellar_radial_velocity must be finite")
+        if not np.isfinite(self.uncertainty_scale) or self.uncertainty_scale <= 0.0:
+            raise ValueError("uncertainty_scale must be positive and finite")
+        if self.lsf_profile_column < 1:
+            raise ValueError("lsf_profile_column must select a profile column")
+        if self.visits is not None and self.visits < 1:
+            raise ValueError("visits must be positive or None")
+        for name, windows in (
+            ("continuum_windows", self.continuum_windows),
+            ("excluded_windows", self.excluded_windows),
+        ):
+            for lower, upper in windows:
+                if lower >= upper:
+                    raise ValueError(f"{name} lower bounds must precede upper bounds")
+        if self.fit_window[0] >= self.fit_window[1]:
+            raise ValueError("fit_window lower bound must precede upper bound")
+
+    def as_dict(self):
+        return {
+            "name": self.name,
+            "spectrum_resource": self.spectrum_resource,
+            "grating": self.grating,
+            "aperture": self.aperture,
+            "wavelength_frame": self.wavelength_frame,
+            "stellar_radial_velocity_km_s": self.stellar_radial_velocity,
+            "continuum_windows": [list(window) for window in self.continuum_windows],
+            "fit_window": list(self.fit_window),
+            "uncertainty_scale": self.uncertainty_scale,
+            "uncertainty_scale_provenance": (
+                "Tom Ayres reduction recommendation"
+                if np.isclose(self.uncertainty_scale, AYRES_PHOTERR_SCALE)
+                else "target specification"
+            ),
+            "lsf_profile_column": self.lsf_profile_column,
+            "excluded_windows": [list(window) for window in self.excluded_windows],
+            "program": self.program,
+            "citation": self.citation,
+            "citation_url": self.citation_url,
+            "reduction_source": self.reduction_source,
+            "coadded": self.coadded,
+            "visits": self.visits,
+            "airglow_subtracted": self.airglow_subtracted,
+            "notes": self.notes,
+        }
+
+
+GJ411_E140M_TARGET = StisTargetSpecification(
+    name="GJ 411",
+    spectrum_resource=GJ411_SPECTRUM_RESOURCE,
+    grating="E140M-1425",
+    aperture="0.2x0.2",
+    wavelength_frame="heliocentric",
+    stellar_radial_velocity=-87.0,
+    continuum_windows=GJ411_CONTINUUM_WINDOWS,
+    fit_window=GJ411_FIT_WINDOW,
+    uncertainty_scale=AYRES_PHOTERR_SCALE,
+    lsf_profile_column=3,
+    excluded_windows=((1215.5475, 1215.6325),),
+    reduction_source="Tom Ayres custom STIS reduction",
+    notes=(
+        "Tom Ayres STIS reduction. The exclusion spans two Gaussian sigma "
+        "around the historical 1215.59 Angstrom, 0.05 Angstrom FWHM "
+        "airglow model."
+    ),
+)
+
+
+GJ729_E140M_TARGET = StisTargetSpecification(
+    name="GJ 729",
+    spectrum_resource=GJ729_SPECTRUM_RESOURCE,
+    grating="E140M-1425",
+    aperture="0.2x0.2",
+    wavelength_frame="heliocentric",
+    stellar_radial_velocity=-11.0,
+    continuum_windows=((1190.0, 1200.0), (1250.0, 1260.0)),
+    fit_window=(1214.8, 1216.3),
+    uncertainty_scale=AYRES_PHOTERR_SCALE,
+    lsf_profile_column=3,
+    excluded_windows=((1215.699, 1215.801),),
+    program="HST GO 15071",
+    citation="Wilson et al. 2025, ApJ, 978, 85",
+    citation_url="https://scixplorer.org/abs/2025ApJ...978...85W/abstract",
+    reduction_source="Tom Ayres custom STIS reduction",
+    coadded=True,
+    visits=2,
+    airglow_subtracted=False,
+    notes=(
+        "Tom Ayres STIS reduction; multiple orbits across two visits were "
+        "coadded; no airglow subtraction was applied. The exclusion spans "
+        "two Gaussian sigma around the historical 1215.75 Angstrom, "
+        "0.06 Angstrom FWHM airglow model. The undefined epsilon array is "
+        "retained in the source file but is not used as a quality mask."
+    ),
+)
+
+
+E140M_TARGETS = {
+    target.name: target
+    for target in (GJ411_E140M_TARGET, GJ729_E140M_TARGET)
+}
 
 
 def _as_vector(values, name):
@@ -79,6 +218,9 @@ class PreparedObservation:
     convolution_kernel: np.ndarray
     continuum_coefficients: np.ndarray
     name: str = ""
+    likelihood_mask: np.ndarray | None = None
+    uncertainty_scale: float = 1.0
+    metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
         wavelength = _as_vector(self.wavelength, "wavelength")
@@ -95,11 +237,30 @@ class PreparedObservation:
             raise ValueError("prepared error values must be positive")
         if np.any(kernel < 0.0) or not np.any(kernel > 0.0):
             raise ValueError("convolution kernel must be non-negative and nonzero")
+        likelihood_mask = (
+            np.ones(wavelength.shape, dtype=bool)
+            if self.likelihood_mask is None
+            else np.asarray(self.likelihood_mask, dtype=bool)
+        )
+        if likelihood_mask.shape != wavelength.shape:
+            raise ValueError("likelihood_mask must match the wavelength shape")
+        if not np.any(likelihood_mask):
+            raise ValueError("likelihood_mask must include at least one pixel")
+        if not np.isfinite(self.uncertainty_scale) or self.uncertainty_scale <= 0.0:
+            raise ValueError("uncertainty_scale must be positive and finite")
+        if not isinstance(self.metadata, dict):
+            raise TypeError("metadata must be a dictionary")
         object.__setattr__(self, "wavelength", wavelength)
         object.__setattr__(self, "flux", flux)
         object.__setattr__(self, "error", error)
         object.__setattr__(self, "convolution_kernel", kernel)
         object.__setattr__(self, "continuum_coefficients", coefficients)
+        object.__setattr__(self, "likelihood_mask", likelihood_mask)
+        object.__setattr__(self, "metadata", dict(self.metadata))
+
+    @property
+    def raw_error(self):
+        return self.error / self.uncertainty_scale
 
 
 def load_idl_spectrum(
@@ -176,6 +337,9 @@ def prepare_stis_observation(
     fit_window,
     continuum_degree=1,
     grating_dispersion=None,
+    uncertainty_scale=1.0,
+    excluded_windows=(),
+    metadata=None,
 ):
     """Continuum-subtract, crop, and prepare an STIS LSF for one spectrum."""
     coefficients, continuum = fit_continuum(
@@ -190,7 +354,7 @@ def prepare_stis_observation(
     if np.count_nonzero(fit_mask) < 2:
         raise ValueError("fit window must contain at least two samples")
     wavelength = spectrum.wavelength[fit_mask]
-    error = spectrum.error[fit_mask]
+    error = spectrum.error[fit_mask] * uncertainty_scale
     if np.any(error <= 0.0):
         raise ValueError("fit window contains non-positive errors")
     if grating_dispersion is None:
@@ -201,6 +365,15 @@ def prepare_stis_observation(
         grating_dispersion,
         wavelength,
     )
+    likelihood_mask = np.ones(wavelength.shape, dtype=bool)
+    for excluded_lower, excluded_upper in excluded_windows:
+        if excluded_lower >= excluded_upper:
+            raise ValueError(
+                "excluded-window lower bounds must precede upper bounds"
+            )
+        likelihood_mask &= ~(
+            (wavelength >= excluded_lower) & (wavelength <= excluded_upper)
+        )
     return PreparedObservation(
         wavelength=wavelength,
         flux=spectrum.flux[fit_mask] - continuum[fit_mask],
@@ -208,19 +381,40 @@ def prepare_stis_observation(
         convolution_kernel=kernel,
         continuum_coefficients=coefficients,
         name=spectrum.name,
+        likelihood_mask=likelihood_mask,
+        uncertainty_scale=float(uncertainty_scale),
+        metadata={} if metadata is None else metadata,
+    )
+
+
+def load_stis_target_observation(target):
+    """Load a packaged spectrum using one reviewed target specification."""
+    if not isinstance(target, StisTargetSpecification):
+        raise TypeError("target must be a StisTargetSpecification")
+    package = resources.files("lyapy")
+    with resources.as_file(package.joinpath(target.spectrum_resource)) as path:
+        spectrum = load_idl_spectrum(path, name=target.name)
+    with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
+        lsf = load_tabulated_lsf(
+            path,
+            profile_column=target.lsf_profile_column,
+        )
+    return prepare_stis_observation(
+        spectrum,
+        lsf,
+        continuum_windows=target.continuum_windows,
+        fit_window=target.fit_window,
+        uncertainty_scale=target.uncertainty_scale,
+        excluded_windows=target.excluded_windows,
+        metadata=target.as_dict(),
     )
 
 
 def load_gj411_observation():
-    """Load and reproduce the reviewed GJ 411 E140M preprocessing recipe."""
-    package = resources.files("lyapy")
-    with resources.as_file(package.joinpath(GJ411_SPECTRUM_RESOURCE)) as path:
-        spectrum = load_idl_spectrum(path, name="GJ 411")
-    with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
-        lsf = load_tabulated_lsf(path)
-    return prepare_stis_observation(
-        spectrum,
-        lsf,
-        continuum_windows=GJ411_CONTINUUM_WINDOWS,
-        fit_window=GJ411_FIT_WINDOW,
-    )
+    """Load GJ 411 with the reviewed Ayres uncertainty and airglow mask."""
+    return load_stis_target_observation(GJ411_E140M_TARGET)
+
+
+def load_gj729_observation():
+    """Load GJ 729 using its reviewed E140M preprocessing specification."""
+    return load_stis_target_observation(GJ729_E140M_TARGET)

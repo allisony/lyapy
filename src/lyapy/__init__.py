@@ -15,10 +15,17 @@ from .models import (
     evaluate_voigt_lya_model,
 )
 from .observations import (
+    AYRES_PHOTERR_SCALE,
+    E140M_TARGETS,
+    GJ411_E140M_TARGET,
+    GJ729_E140M_TARGET,
     ObservedSpectrum,
     PreparedObservation,
+    StisTargetSpecification,
     TabulatedLsf,
     load_gj411_observation,
+    load_gj729_observation,
+    load_stis_target_observation,
     prepare_stis_observation,
 )
 from .profiles import gaussian_flux, lya_intrinsic_profile
@@ -27,11 +34,16 @@ from .priors import legacy_bounded_log_prior
 
 __all__ = [
     "ATOMIC_TRANSITIONS",
+    "AYRES_PHOTERR_SCALE",
     "AtomicTransition",
+    "E140M_TARGETS",
+    "GJ411_E140M_TARGET",
+    "GJ729_E140M_TARGET",
     "LyaForwardModelResult",
     "LyaModelComponents",
     "ObservedSpectrum",
     "PreparedObservation",
+    "StisTargetSpecification",
     "TabulatedLsf",
     "VoigtLyaParameters",
     "evaluate_voigt_lya_model",
@@ -43,6 +55,8 @@ __all__ = [
     "lya_intrinsic_profile",
     "legacy_bounded_log_prior",
     "load_gj411_observation",
+    "load_gj729_observation",
+    "load_stis_target_observation",
     "prepare_stis_observation",
     "tau_profile",
     "total_tau_profile",

@@ -21,8 +21,10 @@ from lyapy.jax_components import (
 from lyapy.jax_composable import ComposableBinnedModel
 from lyapy.jax_instrument import build_high_resolution_operator
 from lyapy.observations import (
+    GJ411_E140M_TARGET,
     STIS_E140M_LSF_RESOURCE,
-    load_gj411_observation,
+    StisTargetSpecification,
+    load_stis_target_observation,
     load_tabulated_lsf,
 )
 
@@ -111,9 +113,25 @@ def build_gj411_observation_operator(
     model_padding=1.0,
 ):
     """Build the shared E140M high-resolution operator for GJ 411."""
+    return build_e140m_observation_operator(
+        wavelength,
+        lsf_profile_column=GJ411_E140M_TARGET.lsf_profile_column,
+        oversample=oversample,
+        model_padding=model_padding,
+    )
+
+
+def build_e140m_observation_operator(
+    wavelength,
+    *,
+    lsf_profile_column=3,
+    oversample=8,
+    model_padding=1.0,
+):
+    """Build an aperture-selected E140M high-resolution operator."""
     package = resources.files("lyapy")
     with resources.as_file(package.joinpath(STIS_E140M_LSF_RESOURCE)) as path:
-        lsf = load_tabulated_lsf(path)
+        lsf = load_tabulated_lsf(path, profile_column=lsf_profile_column)
     wavelength = np.asarray(wavelength, dtype=np.float64)
     dispersion = float(np.median(np.diff(wavelength)))
     operator = build_high_resolution_operator(
@@ -126,6 +144,21 @@ def build_gj411_observation_operator(
     return operator
 
 
+def load_e140m_target_data(target):
+    """Return inference data with target provenance and likelihood mask."""
+    if not isinstance(target, StisTargetSpecification):
+        raise TypeError("target must be a StisTargetSpecification")
+    observation = load_stis_target_observation(target)
+    return SpectrumData(
+        observation.wavelength,
+        observation.flux,
+        observation.error,
+        observation.convolution_kernel,
+        likelihood_mask=observation.likelihood_mask,
+        metadata=observation.metadata,
+    )
+
+
 def load_gj411_composable_problem(
     *,
     configuration=GJ411_COMPOSABLE_CONFIGURATION,
@@ -133,13 +166,7 @@ def load_gj411_composable_problem(
     model_padding=1.0,
 ):
     """Load observed GJ 411 data and its matched composable forward model."""
-    observation = load_gj411_observation()
-    data = SpectrumData(
-        observation.wavelength,
-        observation.flux,
-        observation.error,
-        observation.convolution_kernel,
-    )
+    data = load_e140m_target_data(GJ411_E140M_TARGET)
     forward_model = build_gj411_composable_forward_model(
         data.wavelength,
         oversample=oversample,

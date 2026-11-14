@@ -1,6 +1,6 @@
 """Shared data and parameter definitions for inference backends."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 import jax.numpy as jnp
@@ -261,6 +261,8 @@ class SpectrumData:
     flux: np.ndarray
     error: np.ndarray
     convolution_kernel: np.ndarray
+    likelihood_mask: np.ndarray | None = None
+    metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
         arrays = {
@@ -285,8 +287,32 @@ class SpectrumData:
             raise ValueError("spectrum arrays must contain only finite values")
         if np.any(arrays["error"] <= 0.0):
             raise ValueError("error values must be positive")
+        if np.any(np.diff(arrays["wavelength"]) <= 0.0):
+            raise ValueError("wavelength must be strictly increasing")
+        likelihood_mask = (
+            np.ones(arrays["wavelength"].shape, dtype=bool)
+            if self.likelihood_mask is None
+            else np.asarray(self.likelihood_mask, dtype=bool)
+        )
+        if likelihood_mask.shape != arrays["wavelength"].shape:
+            raise ValueError("likelihood_mask must match the wavelength shape")
+        if not np.any(likelihood_mask):
+            raise ValueError("likelihood_mask must include at least one pixel")
+        if not isinstance(self.metadata, dict):
+            raise TypeError("metadata must be a dictionary")
         for name, array in arrays.items():
             object.__setattr__(self, name, array)
+        object.__setattr__(self, "likelihood_mask", likelihood_mask)
+        object.__setattr__(self, "metadata", dict(self.metadata))
+
+    @property
+    def likelihood_indices(self):
+        """Return detector indices included in likelihood evaluation."""
+        return np.flatnonzero(self.likelihood_mask)
+
+    @property
+    def fitted_pixels(self):
+        return int(np.count_nonzero(self.likelihood_mask))
 
 
 GJ411_CONFIGURATION = InferenceConfiguration(

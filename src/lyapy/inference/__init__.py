@@ -32,8 +32,10 @@ from .composable import (
     COMPOSABLE_GJ411_PARAMETER_NAMES,
     GJ411_COMPOSABLE_CONFIGURATION,
     ComposableInferenceProblem,
+    build_e140m_observation_operator,
     build_gj411_composable_forward_model,
     build_gj411_observation_operator,
+    load_e140m_target_data,
     load_gj411_composable_problem,
 )
 from .identifiability import (
@@ -42,8 +44,13 @@ from .identifiability import (
     prior_standard_deviation,
 )
 from .model_catalog import (
+    GJ411_CATALOG_DEFAULTS,
+    LyaCatalogDefaults,
     ModelCatalogEntry,
+    build_e140m_target_model_catalog,
     build_gj411_model_catalog,
+    build_lya_model_catalog,
+    catalog_defaults_for_target,
     make_model_catalog_entry,
 )
 from .lsf import augment_configuration_with_lsf_width
@@ -115,6 +122,7 @@ from .prior import (
 
 __all__ = [
     "GJ411_CONFIGURATION",
+    "GJ411_CATALOG_DEFAULTS",
     "GJ411_COMPOSABLE_CONFIGURATION",
     "GJ411_STELLAR_CONFIGURATION",
     "GaussianNoiseModel",
@@ -134,6 +142,7 @@ __all__ = [
     "JointForwardModel",
     "JointLikelihood",
     "JointSpectrumData",
+    "LyaCatalogDefaults",
     "ModelComparison",
     "ModelAveragedResult",
     "ModelCatalogEntry",
@@ -178,8 +187,13 @@ __all__ = [
     "analyze_prior_boundaries",
     "prior_standard_deviation",
     "build_gj411_composable_forward_model",
+    "build_e140m_observation_operator",
+    "build_e140m_target_model_catalog",
     "build_gj411_observation_operator",
     "build_gj411_model_catalog",
+    "build_lya_model_catalog",
+    "catalog_defaults_for_target",
+    "load_e140m_target_data",
     "load_gj411_composable_problem",
     "load_inference_comparison",
     "load_inference_result",

@@ -25,6 +25,7 @@ def build_dynesty_functions(
         wave = jnp.asarray(data.wavelength)
         observed = np.asarray(data.flux)
         error = np.asarray(data.error)
+        likelihood_indices = data.likelihood_indices
         kernel = jnp.asarray(data.convolution_kernel)
 
     @jax.jit
@@ -53,9 +54,9 @@ def build_dynesty_functions(
         model_flux = np.asarray(prediction)
         return evaluate_numpy_log_likelihood(
             likelihood_function,
-            observed,
-            model_flux,
-            error,
+            observed[likelihood_indices],
+            model_flux[likelihood_indices],
+            error[likelihood_indices],
             full_parameters,
         )
 

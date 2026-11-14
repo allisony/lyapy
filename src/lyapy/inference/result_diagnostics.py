@@ -154,6 +154,7 @@ class SpectrumFitDiagnostics:
     likelihood_distribution: str
     likelihood_scale_description: str
     wavelength: np.ndarray
+    likelihood_mask: np.ndarray
     central_prediction: np.ndarray
     central_effective_error: np.ndarray
     scaled_residuals: np.ndarray
@@ -183,6 +184,8 @@ class SpectrumFitDiagnostics:
             "likelihood_distribution": self.likelihood_distribution,
             "likelihood_scale_description": self.likelihood_scale_description,
             "pixels": int(self.wavelength.size),
+            "fitted_pixels": int(np.count_nonzero(self.likelihood_mask)),
+            "excluded_pixels": int(np.count_nonzero(~self.likelihood_mask)),
             "central_chi_squared": self.central_chi_squared,
             "degrees_of_freedom": self.degrees_of_freedom,
             "reduced_chi_squared": self.reduced_chi_squared,
@@ -251,10 +254,12 @@ def evaluate_fit_diagnostics(
     scaled_residuals = (
         observation.flux - central_prediction
     ) / central_effective_error
+    likelihood_mask = observation.likelihood_mask
+    fitted_residuals = scaled_residuals[likelihood_mask]
     if distribution == "Gaussian":
-        chi_squared = float(np.sum(scaled_residuals**2))
+        chi_squared = float(np.sum(fitted_residuals**2))
         if len(result.observations) == 1:
-            degrees_of_freedom = observation.wavelength.size - len(
+            degrees_of_freedom = observation.fitted_pixels - len(
                 result.parameter_names
             )
             if degrees_of_freedom <= 0:
@@ -275,15 +280,20 @@ def evaluate_fit_diagnostics(
     large_indices = tuple(
         int(index)
         for index in np.flatnonzero(
-            np.abs(scaled_residuals) >= large_residual_threshold
+            likelihood_mask
+            & (np.abs(scaled_residuals) >= large_residual_threshold)
         )
     )
-    effective_to_reported = central_effective_error / observation.error
+    effective_to_reported = (
+        central_effective_error[likelihood_mask]
+        / observation.error[likelihood_mask]
+    )
     return SpectrumFitDiagnostics(
         spectrum=spectrum,
         likelihood_distribution=distribution,
         likelihood_scale_description=scale_description,
         wavelength=observation.wavelength,
+        likelihood_mask=likelihood_mask,
         central_prediction=central_prediction,
         central_effective_error=central_effective_error,
         scaled_residuals=scaled_residuals,
@@ -292,12 +302,12 @@ def evaluate_fit_diagnostics(
         central_chi_squared=chi_squared,
         degrees_of_freedom=degrees_of_freedom,
         reduced_chi_squared=reduced_chi_squared,
-        residual_mean=float(np.mean(scaled_residuals)),
-        residual_standard_deviation=float(np.std(scaled_residuals)),
+        residual_mean=float(np.mean(fitted_residuals)),
+        residual_standard_deviation=float(np.std(fitted_residuals)),
         residual_root_mean_square=float(
-            np.sqrt(np.mean(scaled_residuals**2))
+            np.sqrt(np.mean(fitted_residuals**2))
         ),
-        maximum_absolute_residual=float(np.max(np.abs(scaled_residuals))),
+        maximum_absolute_residual=float(np.max(np.abs(fitted_residuals))),
         minimum_effective_to_reported_error_ratio=float(
             np.min(effective_to_reported)
         ),
@@ -308,24 +318,24 @@ def evaluate_fit_diagnostics(
             np.max(effective_to_reported)
         ),
         latent_68_percent_coverage=_coverage(
-            observation.flux,
-            latent_bands[1],
-            latent_bands[3],
+            observation.flux[likelihood_mask],
+            latent_bands[1][likelihood_mask],
+            latent_bands[3][likelihood_mask],
         ),
         latent_95_percent_coverage=_coverage(
-            observation.flux,
-            latent_bands[0],
-            latent_bands[4],
+            observation.flux[likelihood_mask],
+            latent_bands[0][likelihood_mask],
+            latent_bands[4][likelihood_mask],
         ),
         predictive_68_percent_coverage=_coverage(
-            observation.flux,
-            predictive_bands[1],
-            predictive_bands[3],
+            observation.flux[likelihood_mask],
+            predictive_bands[1][likelihood_mask],
+            predictive_bands[3][likelihood_mask],
         ),
         predictive_95_percent_coverage=_coverage(
-            observation.flux,
-            predictive_bands[0],
-            predictive_bands[4],
+            observation.flux[likelihood_mask],
+            predictive_bands[0][likelihood_mask],
+            predictive_bands[4][likelihood_mask],
         ),
         large_residual_indices=large_indices,
         large_residual_threshold=float(large_residual_threshold),
@@ -372,14 +382,26 @@ def plot_inference_result(
         observation.flux,
         diagnostics.central_prediction,
     )
+    included = observation.likelihood_mask
     profile_axis.errorbar(
-        observation.wavelength,
-        observation.flux / scale,
-        yerr=observation.error / scale,
+        observation.wavelength[included],
+        observation.flux[included] / scale,
+        yerr=observation.error[included] / scale,
         color="0.45",
         linewidth=0.8,
         label="data (reported errors)",
     )
+    if np.any(~included):
+        profile_axis.errorbar(
+            observation.wavelength[~included],
+            observation.flux[~included] / scale,
+            yerr=observation.error[~included] / scale,
+            color="tab:red",
+            marker="x",
+            linestyle="none",
+            linewidth=0.8,
+            label="excluded from likelihood",
+        )
     if show_posterior_predictive:
         profile_axis.fill_between(
             observation.wavelength,
@@ -417,7 +439,11 @@ def plot_inference_result(
     residual_axis.axhline(0.0, color="0.4", linewidth=1.0)
     residual_axis.plot(
         observation.wavelength,
-        diagnostics.scaled_residuals,
+        np.where(
+            observation.likelihood_mask,
+            diagnostics.scaled_residuals,
+            np.nan,
+        ),
         color="tab:blue",
     )
     residual_axis.axhline(3.0, color="0.7", linestyle=":", linewidth=1.0)
@@ -482,14 +508,26 @@ def plot_inference_comparison(
         layout="constrained",
     )
     scale, exponent = _flux_display_scale(observation.flux)
+    included = observation.likelihood_mask
     profile_axis.errorbar(
-        observation.wavelength,
-        observation.flux / scale,
-        yerr=observation.error / scale,
+        observation.wavelength[included],
+        observation.flux[included] / scale,
+        yerr=observation.error[included] / scale,
         color="0.7",
         linewidth=0.8,
         label="data (reported errors)",
     )
+    if np.any(~included):
+        profile_axis.errorbar(
+            observation.wavelength[~included],
+            observation.flux[~included] / scale,
+            yerr=observation.error[~included] / scale,
+            color="tab:red",
+            marker="x",
+            linestyle="none",
+            linewidth=0.8,
+            label="excluded from likelihood",
+        )
     residual_axis.axhline(0.0, color="0.4", linewidth=1.0)
     colors = plt.get_cmap("tab10").colors
     line_styles = ("-", "--", "-.", ":")
@@ -520,7 +558,11 @@ def plot_inference_comparison(
         )
         residual_axis.plot(
             observation.wavelength,
-            diagnostics.scaled_residuals,
+            np.where(
+                observation.likelihood_mask,
+                diagnostics.scaled_residuals,
+                np.nan,
+            ),
             color=color,
             linestyle=line_style,
             label=result.name,

@@ -44,8 +44,10 @@ COMPARISON_SCHEMA_VERSION = 1
 def _spectrum_specification(data):
     return {
         "pixels": int(data.wavelength.size),
+        "fitted_pixels": data.fitted_pixels,
         "wavelength_minimum": float(np.min(data.wavelength)),
         "wavelength_maximum": float(np.max(data.wavelength)),
+        "metadata": dict(data.metadata),
     }
 
 
@@ -394,6 +396,7 @@ def _same_observations(first, second):
                 "flux",
                 "error",
                 "convolution_kernel",
+                "likelihood_mask",
             )
         ):
             return False
@@ -729,6 +732,7 @@ class InferenceResult:
             arrays[f"{prefix}_wavelength"] = observation.wavelength
             arrays[f"{prefix}_flux"] = observation.flux
             arrays[f"{prefix}_error"] = observation.error
+            arrays[f"{prefix}_likelihood_mask"] = observation.likelihood_mask
             arrays[f"{prefix}_convolution_kernel"] = (
                 observation.convolution_kernel
             )
@@ -934,6 +938,12 @@ def load_inference_result(path):
                 arrays[f"{prefix}_flux"],
                 arrays[f"{prefix}_error"],
                 arrays[f"{prefix}_convolution_kernel"],
+                likelihood_mask=(
+                    arrays[f"{prefix}_likelihood_mask"]
+                    if f"{prefix}_likelihood_mask" in arrays
+                    else None
+                ),
+                metadata=metadata["spectra"][name].get("metadata", {}),
             )
             observations[name] = observation
             predictions[name] = np.asarray(arrays[f"{prefix}_predictions"])

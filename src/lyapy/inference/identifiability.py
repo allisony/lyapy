@@ -138,8 +138,10 @@ def analyze_local_identifiability(data, configuration, free_values=None):
     prior_scales = np.asarray(
         [prior_standard_deviation(parameter) for parameter in configuration.free_parameters]
     )
+    indices = data.likelihood_indices
     scaled_whitened = (
-        jacobian / np.asarray(data.error, dtype=np.float64)[:, None]
+        jacobian[indices]
+        / np.asarray(data.error, dtype=np.float64)[indices, None]
     ) * prior_scales[None, :]
     _, singular_values, right_singular_vectors = np.linalg.svd(
         scaled_whitened,

@@ -78,9 +78,9 @@ def numpyro_spectrum_model(
         "observed_flux_log_likelihood",
         evaluate_jax_log_likelihood(
             likelihood_function,
-            jnp.asarray(data.flux),
-            prediction,
-            jnp.asarray(data.error),
+            jnp.asarray(data.flux)[data.likelihood_indices],
+            prediction[data.likelihood_indices],
+            jnp.asarray(data.error)[data.likelihood_indices],
             full_parameters,
         ),
     )

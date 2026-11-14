@@ -100,6 +100,7 @@ def _same_observations(first, second):
                 "flux",
                 "error",
                 "convolution_kernel",
+                "likelihood_mask",
             )
         )
         for name in first
@@ -346,14 +347,26 @@ def plot_model_average(
         ) from error
     bands = result.prediction_bands(spectrum)
     figure, axis = plt.subplots(figsize=(10.0, 5.5), layout="constrained")
+    included = observation.likelihood_mask
     axis.errorbar(
-        observation.wavelength,
-        observation.flux,
-        yerr=observation.error,
+        observation.wavelength[included],
+        observation.flux[included],
+        yerr=observation.error[included],
         color="0.55",
         linewidth=0.8,
         label="data (reported errors)",
     )
+    if np.any(~included):
+        axis.errorbar(
+            observation.wavelength[~included],
+            observation.flux[~included],
+            yerr=observation.error[~included],
+            color="tab:red",
+            marker="x",
+            linestyle="none",
+            linewidth=0.8,
+            label="excluded from likelihood",
+        )
     axis.fill_between(
         observation.wavelength,
         bands[0],

@@ -25,12 +25,20 @@ python tools/plot_jax_comparison.py
 
 ## Inference prototype
 
-NumPyro/NUTS and dynesty adapters share the same parameter configuration,
-priors, JAX forward model, and Gaussian likelihood. Install the optional
-dependencies and run the validation sequence with:
+NumPyro/NUTS is the default inference backend. Dynesty remains available when
+a marginal-likelihood estimate is specifically required; NUTS users do not
+need to install it. Install one backend—or the combined convenience extra—with:
 
 ```bash
+python -m pip install -e '.[nuts]'
+python -m pip install -e '.[dynesty]'
 python -m pip install -e '.[inference]'
+```
+
+Both adapters share the same parameter configuration, priors, JAX forward
+model, and likelihood interface. Run the existing validation sequence with:
+
+```bash
 python tools/run_inference_smoke_test.py
 python tools/run_stellar_recovery.py
 python tools/run_full_recovery.py
@@ -58,6 +66,30 @@ The composable comparison command uses the corrected high-resolution order of
 operations, untruncated H I/D I absorption, a direct intrinsic-total-flux
 parameter, and the detector-bin integration operator. It records the complete
 model and prior specification alongside the evidence results.
+
+### Reviewed E140M targets
+
+The packaged GJ 411 and GJ 729 spectra have explicit, target-specific
+preprocessing specifications. Both are Tom Ayres `.xl_stis` reductions and use
+his recommended `photerr * sqrt(2)` uncertainty calibration. The saved
+metadata record that provenance, the heliocentric wavelength frame, continuum
+and fitting windows, aperture-selected LSF column, and excluded airglow pixels.
+Masked airglow pixels remain on the native detector grid for convolution and
+bin integration but do not contribute to the likelihood.
+
+Run independent NUTS fits for both stars with:
+
+```bash
+python tools/run_e140m_target_workflow.py --quick --no-progress
+python tools/run_e140m_target_workflow.py \
+    --models single_gaussian single_voigt voigt_legacy_reversal
+```
+
+The quick mode verifies mechanics only. The workflow saves prior-predictive and
+fit plots, portable posterior results, fit diagnostics, and prior-boundary
+diagnostics for every target and model. It intentionally does not rank the
+NUTS fits; predictive comparison will be added with pointwise log likelihoods
+and PSIS-LOO.
 
 ### High-level inference workflow
 
