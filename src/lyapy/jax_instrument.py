@@ -120,12 +120,23 @@ class HighResolutionObservationOperator:
             self.effective_lsf_kernel(parameters),
             mode="same",
         )
+        return convolved, self.bin(convolved)
+
+    def bin(self, high_resolution_flux):
+        """Integrate a high-resolution flux density without LSF convolution.
+
+        This is intended for components whose parameterized profile already
+        describes the observed line-spread function, such as slit-filling
+        geocoronal emission. Point-source stellar spectra should use
+        :meth:`apply` so the calibrated point-source LSF is retained.
+        """
+        flux = jnp.asarray(high_resolution_flux)
         detector_flux = jnp.sum(
-            convolved[jnp.asarray(self.binning_indices)]
+            flux[jnp.asarray(self.binning_indices)]
             * jnp.asarray(self.binning_weights),
             axis=1,
         )
-        return convolved, detector_flux
+        return detector_flux
 
 
 def build_high_resolution_operator(
