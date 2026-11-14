@@ -28,6 +28,8 @@ from lyapy.inference.joint import (
     NamedLikelihood,
     NamedSpectrumData,
     evaluate_joint_numpy_log_likelihoods,
+    gaussian_coadd_log_likelihood_offset,
+    inverse_variance_coadd,
 )
 from lyapy.inference.noise import GaussianNoiseModel, StudentTNoiseModel
 from lyapy.inference.numpyro_backend import numpyro_spectrum_model, run_nuts
@@ -96,6 +98,87 @@ def make_joint_problem():
         parameter_names=("shared_level", "lya_offset", "si3_offset"),
     )
     return data, configuration, forward_model
+
+
+def test_inverse_variance_coadd_matches_joint_gaussian_likelihood():
+    first = spectrum(
+        [1.0, 2.0, 3.0],
+        [1.1, 0.9, 1.2],
+        [0.2, 0.3, 0.4],
+    )
+    second = spectrum(
+        [1.0, 2.0, 3.0],
+        [0.8, 1.05, 1.1],
+        [0.1, 0.2, 0.5],
+    )
+    coadded = inverse_variance_coadd((first, second))
+    offset = gaussian_coadd_log_likelihood_offset((first, second))
+    weights = np.stack((1.0 / first.error**2, 1.0 / second.error**2))
+    expected_flux = np.sum(
+        weights * np.stack((first.flux, second.flux)),
+        axis=0,
+    ) / np.sum(weights, axis=0)
+
+    np.testing.assert_allclose(coadded.flux, expected_flux)
+    np.testing.assert_allclose(
+        coadded.error,
+        1.0 / np.sqrt(np.sum(weights, axis=0)),
+    )
+    assert coadded.metadata["coadd_exposure_count"] == 2
+    for prediction in (
+        np.array([0.7, 1.0, 1.3]),
+        np.array([1.2, 0.8, 1.0]),
+    ):
+        joint = sum(
+            gaussian_log_likelihood(
+                item.flux,
+                prediction,
+                item.error,
+            )
+            for item in (first, second)
+        )
+        coadd = gaussian_log_likelihood(
+            coadded.flux,
+            prediction,
+            coadded.error,
+        )
+        np.testing.assert_allclose(joint, coadd + offset, rtol=1e-13)
+
+
+@pytest.mark.parametrize(
+    ("second", "message"),
+    (
+        (
+            spectrum(
+                [1.01, 2.01, 3.01],
+                [1.0, 1.0, 1.0],
+                [0.1, 0.1, 0.1],
+            ),
+            "identical wavelength grids",
+        ),
+        (
+            SpectrumData(
+                np.array([1.0, 2.0, 3.0]),
+                np.ones(3),
+                np.full(3, 0.1),
+                np.array([0.25, 0.5, 0.25]),
+            ),
+            "identical convolution kernels",
+        ),
+    ),
+)
+def test_inverse_variance_coadd_rejects_cases_requiring_joint_fit(
+    second,
+    message,
+):
+    first = spectrum(
+        [1.0, 2.0, 3.0],
+        [1.0, 1.0, 1.0],
+        [0.1, 0.1, 0.1],
+    )
+
+    with pytest.raises(ValueError, match=message):
+        inverse_variance_coadd((first, second))
 
 
 def test_joint_forward_model_handles_different_spectrum_lengths():

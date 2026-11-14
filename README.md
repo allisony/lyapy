@@ -770,6 +770,66 @@ This demonstrates inference mechanics, not a recommended physical Si III
 prescription. Curated physical priors for Si III, N V, O V, C II, and Mg II
 remain separate work.
 
+### Coadded versus jointly fitted exposures
+
+Inverse-variance coaddition is not intrinsically less rigorous than a joint
+fit. For independent Gaussian errors, it contains exactly the same
+parameter-dependent likelihood when every exposure has the same wavelength
+grid, likelihood mask, detector-space model/LSF, and time-independent source
+spectrum. `inverse_variance_coadd` implements only this exact case and refuses
+to interpolate:
+
+```python
+from lyapy.inference import inverse_variance_coadd
+
+coadded = inverse_variance_coadd((orbit_1, orbit_2, orbit_3))
+problem = InferenceProblem(
+    coadded,
+    configuration,
+    forward_model=shared_forward_model,
+    name="inverse-variance coadd",
+)
+```
+
+The joint and coadded normalized Gaussian log likelihoods differ by a constant
+that is independent of the fitted model parameters. Therefore they give the
+same posterior and, within a common representation, the same Bayes factors.
+Their absolute evidence values should not be compared directly because the
+data vectors have different dimensions and normalization constants.
+
+Use a joint fit when exposures have different native wavelength grids, LSFs,
+masks, background residuals, wavelength offsets, or noise models—or when the
+source may vary. Each exposure retains its own detector operator while the
+physical parameters that should be common appear only once:
+
+```python
+from lyapy.inference import JointForwardModel, JointSpectrumData
+
+joint_data = JointSpectrumData.from_mapping({
+    "visit 1 orbit 1": orbit_1,
+    "visit 1 orbit 2": orbit_2,
+})
+joint_model = JointForwardModel.from_mapping({
+    "visit 1 orbit 1": orbit_1_forward_model,
+    "visit 1 orbit 2": orbit_2_forward_model,
+})
+problem = InferenceProblem(
+    joint_data,
+    configuration,
+    forward_model=joint_model,
+    name="native-grid joint exposure fit",
+)
+```
+
+Interpolating multiple native grids onto one coadd grid generally creates
+pixel-to-pixel covariance. Treating that resampled coadd as independent pixels
+can then make the uncertainties too small. The size of the effect is
+data-dependent; it cannot be measured for GJ 729 from the packaged coadd alone.
+If the individual orbit products become available, the coadd and native-grid
+joint posteriors can be compared directly. When only a coadd exists, lyapy's
+fitted error-scale, additive-jitter, and Student-t likelihoods remain useful
+checks for underestimated or non-Gaussian residuals.
+
 ### UV spectral-line and multiplet catalog
 
 `lyapy.atomic_data` provides vacuum rest wavelengths, oscillator strengths,
