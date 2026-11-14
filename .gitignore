@@ -19,3 +19,8 @@ gj411_inference*.json
 gj411_inference*.npz
 gj411_model_comparison*.json
 composable_validation*.json
+
+# Local science data supplied for development and validation. Keep these files
+# out of Git; only the instructions are versioned.
+user_data/*
+!user_data/README.md

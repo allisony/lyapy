@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from astropy.io import fits
 
 from lyapy.observations import (
     AYRES_PHOTERR_SCALE,
@@ -10,8 +11,121 @@ from lyapy.observations import (
     fit_continuum,
     load_gj411_observation,
     load_gj729_observation,
+    load_stis_x1d,
     prepare_stis_observation,
 )
+
+
+def _write_stis_x1d(path, wavelengths):
+    wavelengths = np.asarray(wavelengths, dtype=np.float64)
+    rows, pixels = wavelengths.shape
+    flux = 2.0 * wavelengths + 3.0
+    error = np.full(wavelengths.shape, 0.2)
+    dq = np.zeros(wavelengths.shape, dtype=np.int32)
+    error[0, 1] = 0.0
+    dq[0, 2] = 4
+    primary = fits.PrimaryHDU()
+    primary.header.update(
+        {
+            "INSTRUME": "STIS",
+            "DETECTOR": "FUV-MAMA",
+            "OPT_ELEM": "G140M",
+            "APERTURE": "52X0.2",
+            "CENWAVE": 1222,
+            "ROOTNAME": "synthetic",
+            "TARGNAME": "TEST-STAR",
+            "PROPOSID": 12345,
+            "HELCORR": "COMPLETE",
+            "CAL_VER": "test",
+        }
+    )
+    columns = fits.ColDefs(
+        [
+            fits.Column(
+                name="SPORDER",
+                format="J",
+                array=np.arange(1, rows + 1),
+            ),
+            fits.Column(
+                name="NELEM",
+                format="J",
+                array=np.full(rows, pixels),
+            ),
+            fits.Column(
+                name="WAVELENGTH",
+                format=f"{pixels}D",
+                unit="Angstroms",
+                array=wavelengths,
+            ),
+            fits.Column(
+                name="FLUX",
+                format=f"{pixels}D",
+                unit="erg/s/cm**2/Angstrom",
+                array=flux,
+            ),
+            fits.Column(
+                name="ERROR",
+                format=f"{pixels}D",
+                unit="erg/s/cm**2/Angstrom",
+                array=error,
+            ),
+            fits.Column(
+                name="DQ",
+                format=f"{pixels}J",
+                array=dq,
+            ),
+        ]
+    )
+    science = fits.BinTableHDU.from_columns(columns, name="SCI")
+    science.header["SDQFLAGS"] = 4
+    science.header["V_HELIO"] = 12.5
+    science.header["EXPTIME"] = 1000.0
+    fits.HDUList([primary, science]).writeto(path)
+
+
+def test_stis_x1d_loader_preserves_headers_units_and_quality_mask(tmp_path):
+    path = tmp_path / "synthetic_x1d.fits"
+    _write_stis_x1d(path, [[1200.0, 1201.0, 1202.0, 1203.0]])
+
+    spectrum = load_stis_x1d(
+        path,
+        name="Synthetic target",
+        metadata_overrides={"coadded": True},
+    )
+
+    assert spectrum.name == "Synthetic target"
+    np.testing.assert_array_equal(
+        spectrum.quality_mask,
+        [True, False, False, True],
+    )
+    assert spectrum.metadata["grating"] == "G140M"
+    assert spectrum.metadata["aperture"] == "52X0.2"
+    assert spectrum.metadata["wavelength_frame"] == "heliocentric"
+    assert spectrum.metadata["heliocentric_velocity_km_s"] == 12.5
+    assert spectrum.metadata["coadded"] is True
+    assert spectrum.metadata["excluded_quality_pixels"] == 2
+    assert spectrum.metadata["wavelength_unit"] == "Angstroms"
+
+
+def test_stis_x1d_loader_selects_echelle_order_by_wavelength(tmp_path):
+    path = tmp_path / "synthetic_x1d.fits"
+    _write_stis_x1d(
+        path,
+        [
+            [1200.0, 1201.0, 1202.0, 1203.0],
+            [1300.0, 1301.0, 1302.0, 1303.0],
+        ],
+    )
+
+    with pytest.raises(ValueError, match="multi-order"):
+        load_stis_x1d(path)
+    spectrum = load_stis_x1d(path, wavelength=1301.0)
+
+    np.testing.assert_array_equal(
+        spectrum.wavelength,
+        [1300.0, 1301.0, 1302.0, 1303.0],
+    )
+    assert spectrum.metadata["spectral_order"] == 2
 
 
 def test_packaged_gj411_observation_matches_frozen_reference(legacy_reference):

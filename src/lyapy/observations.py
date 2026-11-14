@@ -6,6 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 import numpy as np
+from astropy.io import fits
 from scipy.io import readsav
 
 from .instrument import interpolate_stis_lsf
@@ -422,6 +423,8 @@ class ObservedSpectrum:
     flux: np.ndarray
     error: np.ndarray
     name: str = ""
+    quality_mask: np.ndarray | None = None
+    metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
         wavelength = _as_vector(self.wavelength, "wavelength")
@@ -433,9 +436,22 @@ class ObservedSpectrum:
             raise ValueError("wavelength must be strictly increasing")
         if np.any(error < 0.0):
             raise ValueError("error values must be non-negative")
+        quality_mask = (
+            np.ones(wavelength.shape, dtype=bool)
+            if self.quality_mask is None
+            else np.asarray(self.quality_mask, dtype=bool)
+        )
+        if quality_mask.shape != wavelength.shape:
+            raise ValueError("quality_mask must match the wavelength shape")
+        if not np.any(quality_mask):
+            raise ValueError("quality_mask must include at least one pixel")
+        if not isinstance(self.metadata, dict):
+            raise TypeError("metadata must be a dictionary")
         object.__setattr__(self, "wavelength", wavelength)
         object.__setattr__(self, "flux", flux)
         object.__setattr__(self, "error", error)
+        object.__setattr__(self, "quality_mask", quality_mask)
+        object.__setattr__(self, "metadata", dict(self.metadata))
 
 
 @dataclass(frozen=True)
@@ -540,6 +556,164 @@ def load_idl_spectrum(
     )
 
 
+def _stis_header_metadata(primary_header, science_header, path, spectral_order):
+    heliocentric_correction = primary_header.get("HELCORR", "").strip().upper()
+    return {
+        "source_format": "STIS x1d",
+        "filename": Path(path).name,
+        "rootname": primary_header.get("ROOTNAME"),
+        "target_name": primary_header.get("TARGNAME"),
+        "program": primary_header.get("PROPOSID"),
+        "instrument": primary_header.get("INSTRUME"),
+        "detector": primary_header.get("DETECTOR"),
+        "grating": primary_header.get("OPT_ELEM"),
+        "central_wavelength_angstrom": primary_header.get("CENWAVE"),
+        "aperture": primary_header.get("APERTURE"),
+        "wavelength_frame": (
+            "heliocentric"
+            if heliocentric_correction == "COMPLETE"
+            else "pipeline"
+        ),
+        "heliocentric_correction": heliocentric_correction or None,
+        "heliocentric_velocity_km_s": science_header.get("V_HELIO"),
+        "date_obs": science_header.get("DATE-OBS"),
+        "time_obs": science_header.get("TIME-OBS"),
+        "exposure_start_mjd": science_header.get("EXPSTART"),
+        "exposure_end_mjd": science_header.get("EXPEND"),
+        "exposure_time_seconds": science_header.get("EXPTIME"),
+        "association_id": primary_header.get("ASN_ID"),
+        "observation_set": primary_header.get("OBSET_ID"),
+        "calibration_version": primary_header.get("CAL_VER"),
+        "spectral_order": spectral_order,
+        "coadded": False,
+    }
+
+
+def load_stis_x1d(
+    path,
+    *,
+    row=None,
+    wavelength=None,
+    name=None,
+    dq_bad_bits=None,
+    metadata_overrides=None,
+):
+    """Load one calibrated STIS x1d/sx1 spectral row.
+
+    A multi-order echelle product requires either ``row`` or a wavelength used
+    to select the unique order containing it. By default, DQ bits listed in the
+    SCI extension's ``SDQFLAGS`` value and pixels with non-positive errors are
+    excluded through ``ObservedSpectrum.quality_mask``; pixels remain on the
+    wavelength grid for later convolution and bin integration.
+    """
+    path = Path(path)
+    with fits.open(path, memmap=False) as hdus:
+        primary_header = hdus[0].header
+        if str(primary_header.get("INSTRUME", "")).strip().upper() != "STIS":
+            raise ValueError("FITS file is not a STIS product")
+        try:
+            science = hdus["SCI"]
+        except KeyError as error:
+            raise ValueError("STIS FITS file has no SCI extension") from error
+        if science.data is None or len(science.data) == 0:
+            raise ValueError("STIS SCI extension contains no spectral rows")
+        required = {"NELEM", "WAVELENGTH", "FLUX", "ERROR", "DQ"}
+        columns = set(science.columns.names or ())
+        missing = required - columns
+        if missing:
+            names = ", ".join(sorted(missing))
+            raise ValueError(f"STIS SCI table is missing columns: {names}")
+
+        if row is not None and wavelength is not None:
+            raise ValueError("pass either row or wavelength, not both")
+        if row is None and wavelength is not None:
+            matches = []
+            for index, candidate in enumerate(science.data):
+                count = int(candidate["NELEM"])
+                candidate_wavelength = np.asarray(
+                    candidate["WAVELENGTH"][:count],
+                    dtype=np.float64,
+                )
+                if (
+                    candidate_wavelength.size
+                    and candidate_wavelength[0]
+                    <= wavelength
+                    <= candidate_wavelength[-1]
+                ):
+                    matches.append(index)
+            if len(matches) != 1:
+                raise ValueError(
+                    "wavelength must select exactly one STIS spectral row"
+                )
+            row = matches[0]
+        elif row is None:
+            if len(science.data) != 1:
+                raise ValueError(
+                    "multi-order STIS product requires row or wavelength"
+                )
+            row = 0
+        if row < 0 or row >= len(science.data):
+            raise IndexError("STIS spectral row is outside the SCI table")
+
+        record = science.data[row]
+        count = int(record["NELEM"])
+        if count < 2:
+            raise ValueError("STIS spectral row must contain at least two pixels")
+        wavelength_values = np.asarray(
+            record["WAVELENGTH"][:count],
+            dtype=np.float64,
+        )
+        flux = np.asarray(record["FLUX"][:count], dtype=np.float64)
+        error = np.asarray(record["ERROR"][:count], dtype=np.float64)
+        dq = np.asarray(record["DQ"][:count], dtype=np.int64)
+        if dq_bad_bits is None:
+            dq_bad_bits = int(science.header.get("SDQFLAGS", 0))
+        if dq_bad_bits < 0:
+            raise ValueError("dq_bad_bits must be non-negative")
+        quality_mask = (error > 0.0) & ((dq & int(dq_bad_bits)) == 0)
+        spectral_order = (
+            int(record["SPORDER"])
+            if "SPORDER" in columns
+            else None
+        )
+        metadata = _stis_header_metadata(
+            primary_header,
+            science.header,
+            path,
+            spectral_order,
+        )
+        metadata.update(
+            {
+                "science_row": int(row),
+                "pixels": int(count),
+                "dq_bad_bits": int(dq_bad_bits),
+                "excluded_quality_pixels": int(
+                    np.count_nonzero(~quality_mask)
+                ),
+                "flux_unit": science.columns["FLUX"].unit,
+                "error_unit": science.columns["ERROR"].unit,
+                "wavelength_unit": science.columns["WAVELENGTH"].unit,
+            }
+        )
+        if metadata_overrides is not None:
+            if not isinstance(metadata_overrides, dict):
+                raise TypeError("metadata_overrides must be a dictionary")
+            metadata.update(metadata_overrides)
+
+    return ObservedSpectrum(
+        wavelength_values,
+        flux,
+        error,
+        name=(
+            str(metadata.get("target_name") or path.stem)
+            if name is None
+            else name
+        ),
+        quality_mask=quality_mask,
+        metadata=metadata,
+    )
+
+
 def load_tabulated_lsf(
     path,
     *,
@@ -599,6 +773,7 @@ def fit_continuum(spectrum, windows, degree=1):
         if lower >= upper:
             raise ValueError("continuum-window lower bounds must precede upper bounds")
         mask |= (spectrum.wavelength > lower) & (spectrum.wavelength < upper)
+    mask &= spectrum.quality_mask
     if np.count_nonzero(mask) <= degree:
         raise ValueError("continuum windows do not contain enough samples")
     coefficients = np.polyfit(
@@ -635,8 +810,13 @@ def prepare_stis_observation(
         raise ValueError("fit window must contain at least two samples")
     wavelength = spectrum.wavelength[fit_mask]
     error = spectrum.error[fit_mask] * uncertainty_scale
+    likelihood_mask = spectrum.quality_mask[fit_mask].copy()
+    likelihood_mask &= error > 0.0
+    if not np.any(likelihood_mask):
+        raise ValueError("fit window contains no usable positive-error pixels")
     if np.any(error <= 0.0):
-        raise ValueError("fit window contains non-positive errors")
+        error = error.copy()
+        error[error <= 0.0] = float(np.median(error[likelihood_mask]))
     if grating_dispersion is None:
         grating_dispersion = wavelength[1] - wavelength[0]
     kernel = interpolate_stis_lsf(
@@ -645,7 +825,6 @@ def prepare_stis_observation(
         grating_dispersion,
         wavelength,
     )
-    likelihood_mask = np.ones(wavelength.shape, dtype=bool)
     for excluded_lower, excluded_upper in excluded_windows:
         if excluded_lower >= excluded_upper:
             raise ValueError(
@@ -663,7 +842,10 @@ def prepare_stis_observation(
         name=spectrum.name,
         likelihood_mask=likelihood_mask,
         uncertainty_scale=float(uncertainty_scale),
-        metadata={} if metadata is None else metadata,
+        metadata={
+            **spectrum.metadata,
+            **({} if metadata is None else metadata),
+        },
     )
 
 
