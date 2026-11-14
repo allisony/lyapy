@@ -5,6 +5,15 @@ import numpy as np
 
 def gaussian_log_likelihood(observed, predicted, error):
     """Return the normalized independent-Gaussian log likelihood."""
+    return float(
+        np.sum(
+            gaussian_pointwise_log_likelihood(observed, predicted, error)
+        )
+    )
+
+
+def gaussian_pointwise_log_likelihood(observed, predicted, error):
+    """Return one normalized independent-Gaussian contribution per datum."""
     observed = np.asarray(observed, dtype=np.float64)
     predicted = np.asarray(predicted, dtype=np.float64)
     error = np.asarray(error, dtype=np.float64)
@@ -17,6 +26,4 @@ def gaussian_log_likelihood(observed, predicted, error):
     if np.any(error <= 0.0):
         raise ValueError("error values must be positive")
     residual = (observed - predicted) / error
-    return float(
-        -0.5 * np.sum(residual**2 + np.log(2.0 * np.pi * error**2))
-    )
+    return -0.5 * (residual**2 + np.log(2.0 * np.pi * error**2))

@@ -22,6 +22,7 @@ from lyapy.inference.noise import (
     GaussianNoiseModel,
     StudentTNoiseModel,
     augment_configuration_with_noise,
+    evaluate_numpy_pointwise_log_likelihood,
 )
 from lyapy.inference.numpyro_backend import numpyro_spectrum_model, run_nuts
 from lyapy.inference.result_diagnostics import (
@@ -101,6 +102,39 @@ def test_student_t_is_robust_to_one_large_outlier():
             jnp.asarray(parameters),
         ),
         rtol=1e-13,
+    )
+
+
+@pytest.mark.parametrize(
+    "model",
+    (
+        GaussianNoiseModel(fixed_error_scale=1.7, fixed_jitter=0.2),
+        StudentTNoiseModel(
+            fixed_error_scale=1.7,
+            fixed_jitter=0.2,
+            degrees_of_freedom=5.0,
+        ),
+    ),
+)
+def test_noise_models_expose_normalized_pointwise_terms(model):
+    observed = np.array([0.0, 0.5, 1.0])
+    predicted = np.array([0.1, 0.4, 0.8])
+    error = np.array([0.2, 0.3, 0.4])
+    parameters = np.array([0.0])
+
+    pointwise = evaluate_numpy_pointwise_log_likelihood(
+        model,
+        observed,
+        predicted,
+        error,
+        parameters,
+    )
+
+    assert pointwise.shape == observed.shape
+    np.testing.assert_allclose(
+        np.sum(pointwise),
+        model.numpy_log_likelihood(observed, predicted, error, parameters),
+        rtol=1e-14,
     )
 
 

@@ -9,7 +9,10 @@ from jax.scipy.special import gammaln
 import numpy as np
 
 from lyapy.inference.common import InferenceConfiguration, UniformParameter
-from lyapy.likelihoods import gaussian_log_likelihood
+from lyapy.likelihoods import (
+    gaussian_log_likelihood,
+    gaussian_pointwise_log_likelihood,
+)
 
 
 def _validate_index(index, name):
@@ -43,6 +46,39 @@ def evaluate_numpy_log_likelihood(
     if _callable_accepts_parameters(likelihood_function):
         return float(likelihood_function(observed, predicted, error, parameters))
     return float(likelihood_function(observed, predicted, error))
+
+
+def evaluate_numpy_pointwise_log_likelihood(
+    likelihood_function,
+    observed,
+    predicted,
+    error,
+    parameters,
+):
+    """Evaluate normalized per-datum terms when a likelihood exposes them."""
+    method = getattr(
+        likelihood_function,
+        "numpy_pointwise_log_likelihood",
+        None,
+    )
+    if method is not None:
+        values = method(observed, predicted, error, parameters)
+    elif likelihood_function is gaussian_log_likelihood:
+        values = gaussian_pointwise_log_likelihood(observed, predicted, error)
+    else:
+        raise TypeError(
+            "pointwise log likelihood requires gaussian_log_likelihood or a "
+            "likelihood with numpy_pointwise_log_likelihood"
+        )
+    values = np.asarray(values, dtype=np.float64)
+    expected = np.asarray(observed).shape
+    if values.shape != expected:
+        raise ValueError(
+            f"pointwise log likelihood must have shape {expected}"
+        )
+    if not np.all(np.isfinite(values)):
+        raise ValueError("pointwise log likelihood must contain finite values")
+    return values
 
 
 def evaluate_jax_log_likelihood(
@@ -119,8 +155,30 @@ class GaussianNoiseModel:
         return jnp.sqrt((scale * jnp.asarray(error)) ** 2 + jitter**2)
 
     def numpy_log_likelihood(self, observed, predicted, error, parameters):
+        return float(
+            np.sum(
+                self.numpy_pointwise_log_likelihood(
+                    observed,
+                    predicted,
+                    error,
+                    parameters,
+                )
+            )
+        )
+
+    def numpy_pointwise_log_likelihood(
+        self,
+        observed,
+        predicted,
+        error,
+        parameters,
+    ):
         effective_error = self.effective_error_numpy(error, parameters)
-        return gaussian_log_likelihood(observed, predicted, effective_error)
+        return gaussian_pointwise_log_likelihood(
+            observed,
+            predicted,
+            effective_error,
+        )
 
     def jax_log_likelihood(self, observed, predicted, error, parameters):
         effective_error = self.effective_error_jax(error, parameters)
@@ -148,6 +206,24 @@ class StudentTNoiseModel(GaussianNoiseModel):
             raise ValueError("degrees_of_freedom must be positive")
 
     def numpy_log_likelihood(self, observed, predicted, error, parameters):
+        return float(
+            np.sum(
+                self.numpy_pointwise_log_likelihood(
+                    observed,
+                    predicted,
+                    error,
+                    parameters,
+                )
+            )
+        )
+
+    def numpy_pointwise_log_likelihood(
+        self,
+        observed,
+        predicted,
+        error,
+        parameters,
+    ):
         effective_error = self.effective_error_numpy(error, parameters)
         residual = (np.asarray(observed) - np.asarray(predicted)) / effective_error
         nu = self.degrees_of_freedom
@@ -157,8 +233,9 @@ class StudentTNoiseModel(GaussianNoiseModel):
             - 0.5 * math.log(nu * math.pi)
             - np.log(effective_error)
         )
-        return float(
-            np.sum(normalization - 0.5 * (nu + 1.0) * np.log1p(residual**2 / nu))
+        return (
+            normalization
+            - 0.5 * (nu + 1.0) * np.log1p(residual**2 / nu)
         )
 
     def jax_log_likelihood(self, observed, predicted, error, parameters):

@@ -1,9 +1,4 @@
-"""Run reproducible NUTS fits for the reviewed GJ 411 and GJ 729 spectra.
-
-This script fits each requested stellar model independently. It does not rank
-models: predictive comparison and stacking require the planned pointwise
-log-likelihood/PSIS-LOO layer.
-"""
+"""Run and predictively compare NUTS fits for reviewed E140M spectra."""
 
 import argparse
 import json
@@ -25,6 +20,7 @@ import numpy as np
 from lyapy.inference import (
     InferenceProblem,
     build_e140m_target_model_catalog,
+    compare_nuts_results,
     load_e140m_target_data,
 )
 from lyapy.observations import GJ411_E140M_TARGET, GJ729_E140M_TARGET
@@ -92,6 +88,15 @@ def parse_arguments():
 
 def main():
     arguments = parse_arguments()
+    if len(arguments.models) >= 2 and not arguments.list_models:
+        try:
+            import arviz  # noqa: F401 -- fail before running expensive fits
+        except ModuleNotFoundError as error:
+            raise SystemExit(
+                "Comparing two or more NUTS models requires ArviZ. From the "
+                "repository root, run:\n\n"
+                "    python -m pip install -e '.[comparison]'"
+            ) from error
     output_directory = arguments.output_directory
     output_directory.mkdir(parents=True, exist_ok=True)
     reports = {}
@@ -122,6 +127,7 @@ def main():
         target_directory = output_directory / target_key
         target_directory.mkdir(parents=True, exist_ok=True)
         model_reports = {}
+        completed_results = []
         for model_index, model_name in enumerate(arguments.models):
             entry = catalog[model_name]
             problem = InferenceProblem(
@@ -163,6 +169,7 @@ def main():
             fit_plot_path = model_stem.with_name(f"{model_stem.name}_fit.png")
             fit_plot.savefig(fit_plot_path, dpi=180)
             plt.close(fit_plot)
+            completed_results.append(result)
 
             model_reports[model_name] = {
                 "catalog": entry.as_dict(),
@@ -182,22 +189,59 @@ def main():
                 },
             }
 
+        predictive_report = None
+        if len(completed_results) >= 2:
+            comparison = compare_nuts_results(completed_results)
+            comparison_path = comparison.save(
+                target_directory / "psis_loo_comparison"
+            )
+            comparison_plot = comparison.plot()
+            comparison_plot_path = (
+                target_directory / "psis_loo_comparison.png"
+            )
+            comparison_plot.savefig(comparison_plot_path, dpi=180)
+            plt.close(comparison_plot)
+            stacking_plot = comparison.plot_average()
+            stacking_plot_path = target_directory / "predictive_stacking.png"
+            stacking_plot.savefig(stacking_plot_path, dpi=180)
+            plt.close(stacking_plot)
+            pareto_paths = {}
+            for model_name, loo_result in zip(
+                arguments.models,
+                comparison.loo_results,
+            ):
+                pareto_plot = loo_result.plot_pareto_k()
+                pareto_path = target_directory / (
+                    f"{_slug(model_name)}_pareto_k.png"
+                )
+                pareto_plot.savefig(pareto_path, dpi=180)
+                plt.close(pareto_plot)
+                pareto_paths[model_name] = str(pareto_path)
+            predictive_report = comparison.as_dict()
+            predictive_report["files"] = {
+                "summary": str(comparison_path),
+                "comparison_plot": str(comparison_plot_path),
+                "stacking_plot": str(stacking_plot_path),
+                "pareto_k_plots": pareto_paths,
+            }
+
         reports[target_key] = {
             "target": target.as_dict(),
             "detector_pixels": int(data.wavelength.size),
             "fitted_pixels": data.fitted_pixels,
             "initial_log_total_flux": initial_log_total_flux,
             "models": model_reports,
+            "predictive_comparison": predictive_report,
         }
 
     if arguments.list_models:
         return
     report = {
-        "workflow": "two-target E140M NUTS fits",
+        "workflow": "two-target E140M NUTS fits and predictive comparison",
         "quick_mechanics_only": arguments.quick,
         "model_ranking": (
-            "not calculated; planned PSIS-LOO comparison requires pointwise "
-            "log-likelihood samples"
+            "pixel-level PSIS-LOO with predictive stacking when at least two "
+            "models are requested"
         ),
         "settings": {
             "oversample": 4 if arguments.quick else arguments.oversample,

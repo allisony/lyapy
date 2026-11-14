@@ -27,6 +27,7 @@ from lyapy.inference.joint import (
     JointLikelihood,
     JointSpectrumData,
 )
+from lyapy.inference.noise import evaluate_numpy_pointwise_log_likelihood
 from lyapy.inference.reconstruction import (
     DEFAULT_PERCENTILE_PROBABILITIES,
     ReconstructionEvaluator,
@@ -222,6 +223,41 @@ def _evaluate_predictions(problem, free_values):
     return {"spectrum": np.asarray(prediction)}
 
 
+def _evaluate_pointwise_log_likelihoods(problem, free_values, predictions):
+    """Evaluate per-fitted-pixel terms for supported likelihoods."""
+    observations = _observation_mapping(problem)
+    pointwise = {}
+    for name, observation in observations.items():
+        likelihood_function = problem.likelihood_function
+        if isinstance(likelihood_function, JointLikelihood):
+            likelihood_function = likelihood_function.likelihood_for(name)
+        if (
+            likelihood_function is not gaussian_log_likelihood
+            and getattr(
+                likelihood_function,
+                "numpy_pointwise_log_likelihood",
+                None,
+            )
+            is None
+        ):
+            continue
+        indices = observation.likelihood_indices
+        rows = []
+        for values, prediction in zip(free_values, predictions[name]):
+            parameters = problem.configuration.assemble_numpy(values)
+            rows.append(
+                evaluate_numpy_pointwise_log_likelihood(
+                    likelihood_function,
+                    observation.flux[indices],
+                    prediction[indices],
+                    observation.error[indices],
+                    parameters,
+                )
+            )
+        pointwise[name] = np.vstack(rows)
+    return pointwise
+
+
 def _supports_physical_reconstruction(data, configuration, forward_model):
     result = forward_model(
         data.wavelength,
@@ -362,6 +398,11 @@ def run_inference(
     }
     if set(predictions) != set(observations):
         predictions = _evaluate_predictions(problem, samples)
+    pointwise_log_likelihoods = (
+        _evaluate_pointwise_log_likelihoods(problem, samples, predictions)
+        if backend == "nuts"
+        else {}
+    )
 
     return InferenceResult(
         name=problem.name,
@@ -376,6 +417,7 @@ def run_inference(
         observations=observations,
         predictions=predictions,
         reconstructions=reconstructions,
+        pointwise_log_likelihoods=pointwise_log_likelihoods,
     )
 
 
@@ -463,6 +505,7 @@ class InferenceResult:
     observations: dict[str, SpectrumData]
     predictions: dict[str, np.ndarray]
     reconstructions: dict[str, ReconstructionSamples] = field(default_factory=dict)
+    pointwise_log_likelihoods: dict[str, np.ndarray] = field(default_factory=dict)
     log_evidence: float | None = None
     log_evidence_error: float | None = None
 
@@ -547,6 +590,24 @@ class InferenceResult:
                 )
             ):
                 raise ValueError("reconstructions must contain finite values")
+        pointwise_log_likelihoods = {
+            name: np.asarray(values, dtype=np.float64)
+            for name, values in self.pointwise_log_likelihoods.items()
+        }
+        if not set(pointwise_log_likelihoods).issubset(observations):
+            raise ValueError(
+                "pointwise_log_likelihoods must match named observations"
+            )
+        for name, values in pointwise_log_likelihoods.items():
+            expected = (samples.shape[0], observations[name].fitted_pixels)
+            if values.shape != expected:
+                raise ValueError(
+                    f"pointwise log likelihood {name!r} must have shape {expected}"
+                )
+            if not np.all(np.isfinite(values)):
+                raise ValueError(
+                    "pointwise log likelihoods must contain finite values"
+                )
         if not isinstance(self.diagnostics, dict):
             raise TypeError("diagnostics must be a dictionary")
         if not isinstance(self.problem_specification, dict):
@@ -569,6 +630,11 @@ class InferenceResult:
         object.__setattr__(self, "observations", observations)
         object.__setattr__(self, "predictions", predictions)
         object.__setattr__(self, "reconstructions", reconstructions)
+        object.__setattr__(
+            self,
+            "pointwise_log_likelihoods",
+            pointwise_log_likelihoods,
+        )
 
     @property
     def draws(self):
@@ -659,6 +725,12 @@ class InferenceResult:
             ),
         )
 
+    def psis_loo(self, spectrum="spectrum"):
+        """Evaluate pixel-level PSIS-LOO for a completed NUTS result."""
+        from lyapy.inference.predictive_comparison import evaluate_psis_loo
+
+        return evaluate_psis_loo(self, spectrum=spectrum)
+
     def plot(
         self,
         spectrum="spectrum",
@@ -711,6 +783,9 @@ class InferenceResult:
                 name: {
                     **_spectrum_specification(observation),
                     "has_intrinsic_reconstruction": name in self.reconstructions,
+                    "has_pointwise_log_likelihood": (
+                        name in self.pointwise_log_likelihoods
+                    ),
                 }
                 for name, observation in self.observations.items()
             },
@@ -737,6 +812,10 @@ class InferenceResult:
                 observation.convolution_kernel
             )
             arrays[f"{prefix}_predictions"] = self.predictions[name]
+            if name in self.pointwise_log_likelihoods:
+                arrays[f"{prefix}_pointwise_log_likelihood"] = (
+                    self.pointwise_log_likelihoods[name]
+                )
             reconstruction = self.reconstructions.get(name)
             if reconstruction is not None:
                 arrays[f"{prefix}_model_wavelength"] = (
@@ -751,6 +830,9 @@ class InferenceResult:
                     "name": name,
                     "array_prefix": prefix,
                     "has_intrinsic_reconstruction": reconstruction is not None,
+                    "has_pointwise_log_likelihood": (
+                        name in self.pointwise_log_likelihoods
+                    ),
                 }
             )
         np.savez_compressed(arrays_path, **arrays)
@@ -923,6 +1005,7 @@ def load_inference_result(path):
     observations = {}
     predictions = {}
     reconstructions = {}
+    pointwise_log_likelihoods = {}
     with np.load(arrays_path, allow_pickle=False) as arrays:
         samples = np.asarray(arrays["posterior_samples"])
         weights = (
@@ -947,6 +1030,10 @@ def load_inference_result(path):
             )
             observations[name] = observation
             predictions[name] = np.asarray(arrays[f"{prefix}_predictions"])
+            if spectrum.get("has_pointwise_log_likelihood", False):
+                pointwise_log_likelihoods[name] = np.asarray(
+                    arrays[f"{prefix}_pointwise_log_likelihood"]
+                )
             if spectrum["has_intrinsic_reconstruction"]:
                 reconstructions[name] = ReconstructionSamples(
                     model_wavelength=np.asarray(
@@ -971,6 +1058,7 @@ def load_inference_result(path):
         observations=observations,
         predictions=predictions,
         reconstructions=reconstructions,
+        pointwise_log_likelihoods=pointwise_log_likelihoods,
     )
 
 

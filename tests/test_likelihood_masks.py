@@ -77,6 +77,7 @@ def test_nuts_runs_with_a_static_likelihood_mask(masked_problem, tmp_path):
 
     assert result.draws == 8
     assert result.observations["spectrum"].fitted_pixels == 3
+    assert result.pointwise_log_likelihoods["spectrum"].shape == (8, 3)
     diagnostics = result.fit_diagnostics(random_seed=11)
     assert diagnostics.as_dict()["pixels"] == 4
     assert diagnostics.as_dict()["fitted_pixels"] == 3
@@ -91,6 +92,10 @@ def test_nuts_runs_with_a_static_likelihood_mask(masked_problem, tmp_path):
     )
     assert restored.observations["spectrum"].metadata == (
         masked_problem.data.metadata
+    )
+    np.testing.assert_allclose(
+        restored.pointwise_log_likelihoods["spectrum"],
+        result.pointwise_log_likelihoods["spectrum"],
     )
 
 

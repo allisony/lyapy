@@ -43,6 +43,11 @@ nuts = [
     "jax==0.12.0.1",
     "numpyro==0.22.0",
 ]
+comparison = [
+    "jax==0.12.0.1",
+    "numpyro==0.22.0",
+    "arviz>=0.20,<1",
+]
 dynesty = [
     "jax==0.12.0.1",
     "dynesty==3.2.0",
@@ -51,6 +56,7 @@ inference = [
     "jax==0.12.0.1",
     "numpyro==0.22.0",
     "dynesty==3.2.0",
+    "arviz>=0.20,<1",
 ]
 
 [project.urls]

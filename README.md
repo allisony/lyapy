@@ -27,10 +27,12 @@ python tools/plot_jax_comparison.py
 
 NumPyro/NUTS is the default inference backend. Dynesty remains available when
 a marginal-likelihood estimate is specifically required; NUTS users do not
-need to install it. Install one backend—or the combined convenience extra—with:
+need to install it. ArviZ is also optional: install it with NUTS only when
+using PSIS-LOO and predictive stacking. Install the needed extra with:
 
 ```bash
 python -m pip install -e '.[nuts]'
+python -m pip install -e '.[comparison]'
 python -m pip install -e '.[dynesty]'
 python -m pip install -e '.[inference]'
 ```
@@ -87,9 +89,11 @@ python tools/run_e140m_target_workflow.py \
 
 The quick mode verifies mechanics only. The workflow saves prior-predictive and
 fit plots, portable posterior results, fit diagnostics, and prior-boundary
-diagnostics for every target and model. It intentionally does not rank the
-NUTS fits; predictive comparison will be added with pointwise log likelihoods
-and PSIS-LOO.
+diagnostics for every target and model. With two or more models it also saves
+pixel-level PSIS-LOO rankings, predictive-stacking weights, a stacking-weighted
+spectrum, and a Pareto-k diagnostic plot for every model. A one-model run still
+requires only the `nuts` extra; model comparison requires the `comparison`
+extra.
 
 ### High-level inference workflow
 
@@ -136,8 +140,10 @@ predictions are always available. Intrinsic profiles and integrated-flux
 summaries are included when the forward model exposes those physical products;
 set `reconstruct=False` to skip them. Dynesty results include normalized
 posterior weights and evidence, while NUTS results do not claim an evidence
-estimate. `JointSpectrumData` and `JointForwardModel` use this same workflow for
-joint fits of multiple lines.
+estimate. NUTS results also retain normalized log-likelihood contributions for
+each fitted pixel when the likelihood exposes them, enabling PSIS-LOO without
+rerunning the fit. `JointSpectrumData` and `JointForwardModel` use this same
+workflow for joint fits of multiple lines.
 
 The fully commented
 [`tools/example_inference_workflow.py`](tools/example_inference_workflow.py)
@@ -150,8 +156,45 @@ piece at a time. Run its non-scientific mechanics check with:
 python tools/example_inference_workflow.py --quick --no-progress
 ```
 
-Several complete problems can be compared through the same interface. Model
-comparison always uses dynesty because NUTS does not estimate the evidence:
+Completed NUTS fits to the same observations can be compared by estimated
+out-of-sample predictive accuracy:
+
+```python
+from lyapy.inference import compare_nuts_results
+
+predictive = compare_nuts_results(
+    (single_gaussian_result, single_voigt_result, reversed_voigt_result)
+)
+print(predictive.ranking)
+print(predictive.compare("single_voigt", "single_gaussian"))
+print(predictive.stacking_weights)
+predictive.plot().savefig("psis_loo_comparison.png", dpi=180)
+predictive.plot_average().savefig("predictive_stacking.png", dpi=180)
+predictive.save("psis_loo_comparison.json")
+```
+
+Higher expected log predictive density (ELPD-LOO) is better. Pairwise results
+report ΔELPD and its paired standard error; a difference small relative to that
+standard error is weak predictive separation. Pareto-k values identify pixels
+whose leave-one-out estimate is influential or unreliable. Inspect each
+model's reported sample-size-dependent threshold and warning rather than using
+the ranking alone.
+
+The stacking weights choose a mixture of model predictions that optimizes
+expected predictive performance. They are not posterior probabilities that a
+model is true. The stacking-weighted spectrum and integrated intrinsic flux
+therefore propagate useful predictive model uncertainty without making that
+stronger claim.
+
+This first implementation leaves out individual fitted detector pixels.
+Oversampled or otherwise correlated STIS pixels contain less independent
+information than that calculation assumes, so pixel-level PSIS-LOO can be
+optimistic. The saved report states this limitation explicitly. Blocked
+cross-validation over contiguous wavelength regions is the planned stronger
+check for correlated spectra.
+
+For genuine marginal likelihoods and Bayes factors, several complete problems
+can instead be compared with dynesty because NUTS does not estimate evidence:
 
 ```python
 from lyapy.inference import compare_inference_problems

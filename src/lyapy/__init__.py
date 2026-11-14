@@ -7,7 +7,10 @@ from .atomic_data import (
     get_atomic_transition,
 )
 from .instrument import gaussian_kernel, interpolate_stis_lsf
-from .likelihoods import gaussian_log_likelihood
+from .likelihoods import (
+    gaussian_log_likelihood,
+    gaussian_pointwise_log_likelihood,
+)
 from .models import (
     LyaForwardModelResult,
     LyaModelComponents,
@@ -50,6 +53,7 @@ __all__ = [
     "gaussian_flux",
     "gaussian_kernel",
     "gaussian_log_likelihood",
+    "gaussian_pointwise_log_likelihood",
     "get_atomic_transition",
     "interpolate_stis_lsf",
     "lya_intrinsic_profile",

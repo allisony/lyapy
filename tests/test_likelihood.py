@@ -1,7 +1,10 @@
 import numpy as np
 
 from lyapy import fitting
-from lyapy.likelihoods import gaussian_log_likelihood
+from lyapy.likelihoods import (
+    gaussian_log_likelihood,
+    gaussian_pointwise_log_likelihood,
+)
 
 
 def constant_model(x, resolution, parameters, variables, lnlike=True):
@@ -37,6 +40,13 @@ def test_gaussian_log_likelihood_matches_direct_calculation():
         expected,
         rtol=1e-14,
     )
+    pointwise = gaussian_pointwise_log_likelihood(
+        y[0],
+        np.full_like(y[0], theta[0]),
+        yerr[0],
+    )
+    assert pointwise.shape == y[0].shape
+    np.testing.assert_allclose(np.sum(pointwise), expected, rtol=1e-14)
 
 
 def test_gaussian_log_likelihood_validates_errors():

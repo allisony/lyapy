@@ -194,6 +194,7 @@ def test_nuts_workflow_returns_backend_neutral_products(nuts_result):
     assert result.log_evidence is None
     assert result.reconstructions == {}
     assert result.predictions["spectrum"].shape == (16, 17)
+    assert result.pointwise_log_likelihoods["spectrum"].shape == (16, 17)
     assert result.parameter_samples()["total_flux"].shape == (16,)
     assert result.parameter_summary()["total_flux"]["mean"] > 0.0
     assert result.prediction_bands(probabilities=(0.5,)).shape == (1, 17)

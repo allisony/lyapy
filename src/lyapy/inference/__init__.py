@@ -70,6 +70,7 @@ from .noise import (
     augment_configuration_with_noise,
     evaluate_jax_log_likelihood,
     evaluate_numpy_log_likelihood,
+    evaluate_numpy_pointwise_log_likelihood,
 )
 from .reconstruction import (
     DEFAULT_PERCENTILE_PROBABILITIES,
@@ -97,6 +98,14 @@ from .workflow import (
     load_inference_comparison,
     load_inference_result,
     run_inference,
+)
+from .predictive_comparison import (
+    PredictiveModelComparison,
+    PredictiveRanking,
+    PsisLooComparisonResult,
+    PsisLooResult,
+    compare_nuts_results,
+    evaluate_psis_loo,
 )
 from .averaging import (
     ModelAveragedResult,
@@ -157,6 +166,10 @@ __all__ = [
     "PriorSensitivityResult",
     "PriorSensitivityScenario",
     "PriorSensitivityScenarioResult",
+    "PredictiveModelComparison",
+    "PredictiveRanking",
+    "PsisLooComparisonResult",
+    "PsisLooResult",
     "ReconstructionSamples",
     "ReconstructionEvaluator",
     "SpectrumData",
@@ -180,6 +193,7 @@ __all__ = [
     "summarize_integrated_flux",
     "compare_evidence",
     "compare_inference_problems",
+    "compare_nuts_results",
     "rank_evidence",
     "run_evidence_comparison",
     "run_inference",
@@ -212,6 +226,8 @@ __all__ = [
     "augment_configuration_with_lsf_width",
     "evaluate_jax_log_likelihood",
     "evaluate_numpy_log_likelihood",
+    "evaluate_numpy_pointwise_log_likelihood",
+    "evaluate_psis_loo",
     "evaluate_joint_jax_log_likelihoods",
     "evaluate_joint_numpy_log_likelihoods",
 ]
