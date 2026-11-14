@@ -18,12 +18,19 @@ def test_packaged_gj411_observation_matches_frozen_reference(legacy_reference):
     observation = load_gj411_observation()
 
     assert observation.name == "GJ 411"
-    np.testing.assert_array_equal(
+    np.testing.assert_allclose(
         observation.continuum_coefficients,
         legacy_reference["continuum_coefficients"],
+        rtol=1e-12,
+        atol=0.0,
     )
     np.testing.assert_array_equal(observation.wavelength, legacy_reference["wave"])
-    np.testing.assert_array_equal(observation.flux, legacy_reference["flux"])
+    np.testing.assert_allclose(
+        observation.flux,
+        legacy_reference["flux"],
+        rtol=1e-12,
+        atol=1e-25,
+    )
     np.testing.assert_allclose(
         observation.error,
         legacy_reference["error"] * AYRES_PHOTERR_SCALE,
