@@ -23,6 +23,62 @@ STIS_LSF_SOURCE_URL = (
 GJ411_CONTINUUM_WINDOWS = ((1212.0, 1213.0), (1217.0, 1217.9))
 GJ411_FIT_WINDOW = (1214.5, 1216.55)
 AYRES_PHOTERR_SCALE = float(np.sqrt(2.0))
+SPEED_OF_LIGHT_KM_S = 299792.458
+
+# STIS Data Handbook, Table 2.9. These are bit values rather than mutually
+# exclusive integer codes; a pixel can carry several conditions at once.
+STIS_DQ_FLAGS = MappingProxyType(
+    {
+        1: "Reed-Solomon decoding error",
+        2: "Lost data replaced by fill values",
+        4: "Bad detector pixel",
+        8: "Data masked by occulting bar",
+        16: "Dark rate more than 5 sigma above the median",
+        32: "Large blemish below 40% flat-field response (repeller wire)",
+        64: "Vignetted pixel",
+        128: "Overscan-region pixel",
+        256: "Saturated or locally nonlinear pixel",
+        512: "Bad pixel in a reference file",
+        1024: "Small blemish between 40% and 70% flat-field response",
+        2048: "More than 30% of background pixels rejected",
+        4096: "Extracted flux affected by bad input data",
+        8192: "Input pixel rejected during image combination",
+        16384: "Extracted flux not CTI-corrected because gross counts are non-positive",
+    }
+)
+
+
+def decode_stis_dq(value):
+    """Return the documented STIS conditions present in one DQ value."""
+    value = int(value)
+    if value < 0:
+        raise ValueError("STIS DQ values must be non-negative")
+    return tuple(
+        (flag, description)
+        for flag, description in STIS_DQ_FLAGS.items()
+        if value & flag
+    )
+
+
+def stis_airglow_wavelength(
+    heliocentric_velocity_km_s,
+    *,
+    rest_wavelength=1215.67,
+):
+    """Locate geocentric airglow on a heliocentric-corrected STIS grid.
+
+    ``V_HELIO`` is the velocity correction applied by CALSTIS. A terrestrial
+    feature therefore appears with the opposite apparent velocity after the
+    correction. The first-order Doppler expression is adequate at HST orbital
+    and barycentric velocities.
+    """
+    velocity = float(heliocentric_velocity_km_s)
+    rest_wavelength = float(rest_wavelength)
+    if not np.isfinite(velocity):
+        raise ValueError("heliocentric velocity must be finite")
+    if not np.isfinite(rest_wavelength) or rest_wavelength <= 0.0:
+        raise ValueError("rest wavelength must be positive and finite")
+    return rest_wavelength * (1.0 - velocity / SPEED_OF_LIGHT_KM_S)
 
 
 def _normalized_grating(value):
@@ -425,6 +481,7 @@ class ObservedSpectrum:
     name: str = ""
     quality_mask: np.ndarray | None = None
     metadata: dict = field(default_factory=dict)
+    data_quality: np.ndarray | None = None
 
     def __post_init__(self):
         wavelength = _as_vector(self.wavelength, "wavelength")
@@ -447,11 +504,21 @@ class ObservedSpectrum:
             raise ValueError("quality_mask must include at least one pixel")
         if not isinstance(self.metadata, dict):
             raise TypeError("metadata must be a dictionary")
+        data_quality = (
+            np.zeros(wavelength.shape, dtype=np.int64)
+            if self.data_quality is None
+            else np.asarray(self.data_quality, dtype=np.int64)
+        )
+        if data_quality.shape != wavelength.shape:
+            raise ValueError("data_quality must match the wavelength shape")
+        if np.any(data_quality < 0):
+            raise ValueError("data_quality values must be non-negative")
         object.__setattr__(self, "wavelength", wavelength)
         object.__setattr__(self, "flux", flux)
         object.__setattr__(self, "error", error)
         object.__setattr__(self, "quality_mask", quality_mask)
         object.__setattr__(self, "metadata", dict(self.metadata))
+        object.__setattr__(self, "data_quality", data_quality)
 
 
 @dataclass(frozen=True)
@@ -687,9 +754,34 @@ def load_stis_x1d(
                 "science_row": int(row),
                 "pixels": int(count),
                 "dq_bad_bits": int(dq_bad_bits),
+                "extraction_center_a2_pixels": (
+                    float(record["A2CENTER"])
+                    if "A2CENTER" in columns
+                    else None
+                ),
+                "extraction_box_height_pixels": (
+                    float(record["EXTRSIZE"])
+                    if "EXTRSIZE" in columns
+                    else None
+                ),
+                "extraction_max_search_pixels": (
+                    int(record["MAXSRCH"])
+                    if "MAXSRCH" in columns
+                    else None
+                ),
+                "extraction_offset_pixels": (
+                    float(record["OFFSET"])
+                    if "OFFSET" in columns
+                    else None
+                ),
                 "excluded_quality_pixels": int(
                     np.count_nonzero(~quality_mask)
                 ),
+                "dq_flag_counts": {
+                    str(flag): int(np.count_nonzero(dq & flag))
+                    for flag in STIS_DQ_FLAGS
+                    if np.any(dq & flag)
+                },
                 "flux_unit": science.columns["FLUX"].unit,
                 "error_unit": science.columns["ERROR"].unit,
                 "wavelength_unit": science.columns["WAVELENGTH"].unit,
@@ -711,6 +803,7 @@ def load_stis_x1d(
         ),
         quality_mask=quality_mask,
         metadata=metadata,
+        data_quality=dq,
     )
 
 

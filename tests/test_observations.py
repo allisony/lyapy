@@ -8,11 +8,13 @@ from lyapy.observations import (
     GJ729_E140M_TARGET,
     ObservedSpectrum,
     TabulatedLsf,
+    decode_stis_dq,
     fit_continuum,
     load_gj411_observation,
     load_gj729_observation,
     load_stis_x1d,
     prepare_stis_observation,
+    stis_airglow_wavelength,
 )
 
 
@@ -104,7 +106,24 @@ def test_stis_x1d_loader_preserves_headers_units_and_quality_mask(tmp_path):
     assert spectrum.metadata["heliocentric_velocity_km_s"] == 12.5
     assert spectrum.metadata["coadded"] is True
     assert spectrum.metadata["excluded_quality_pixels"] == 2
+    assert spectrum.metadata["dq_flag_counts"] == {"4": 1}
+    assert spectrum.metadata["extraction_offset_pixels"] is None
     assert spectrum.metadata["wavelength_unit"] == "Angstroms"
+    np.testing.assert_array_equal(spectrum.data_quality, [0, 0, 4, 0])
+
+
+def test_stis_dq_decoder_and_airglow_location_are_explicit():
+    assert decode_stis_dq(32 | 16) == (
+        (16, "Dark rate more than 5 sigma above the median"),
+        (32, "Large blemish below 40% flat-field response (repeller wire)"),
+    )
+    assert decode_stis_dq(0) == ()
+    with pytest.raises(ValueError, match="non-negative"):
+        decode_stis_dq(-1)
+
+    # A positive heliocentric correction shifts stationary terrestrial
+    # airglow blueward on the corrected wavelength grid.
+    assert stis_airglow_wavelength(10.0) < 1215.67
 
 
 def test_stis_x1d_loader_selects_echelle_order_by_wavelength(tmp_path):
