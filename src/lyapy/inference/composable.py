@@ -237,19 +237,24 @@ def prepare_observed_spectrum_data(
     fit_window,
     *,
     exclusion_windows=(),
+    uncertainty_scale=1.0,
 ):
     """Crop raw flux without subtracting a continuum or airglow model.
 
     Quality-mask exclusions and optional wavelength exclusions are retained in
-    the likelihood mask. Pixels with non-positive uncertainties remain on the
-    native detector grid, but receive a finite placeholder uncertainty and are
-    excluded from the likelihood. The placeholder never contributes to a fit.
+    the likelihood mask. ``uncertainty_scale`` is applied before validation.
+    Pixels with non-positive uncertainties remain on the native detector grid,
+    but receive a finite placeholder uncertainty and are excluded from the
+    likelihood. The placeholder never contributes to a fit.
 
     The convolution-kernel field is set to a unit impulse because composable
     models carry their high-resolution observation operator explicitly.
     """
     if not isinstance(spectrum, ObservedSpectrum):
         raise TypeError("spectrum must be an ObservedSpectrum")
+    uncertainty_scale = float(uncertainty_scale)
+    if not np.isfinite(uncertainty_scale) or uncertainty_scale <= 0.0:
+        raise ValueError("uncertainty_scale must be positive and finite")
     lower, upper = (float(value) for value in fit_window)
     if not np.isfinite(lower) or not np.isfinite(upper) or lower >= upper:
         raise ValueError("fit_window bounds must be finite and increasing")
@@ -261,7 +266,7 @@ def prepare_observed_spectrum_data(
         raise ValueError("fit_window must contain at least two detector pixels")
     wavelength = spectrum.wavelength[fit_mask]
     flux = spectrum.flux[fit_mask]
-    error = spectrum.error[fit_mask].copy()
+    error = spectrum.error[fit_mask].copy() * uncertainty_scale
     likelihood_mask = spectrum.quality_mask[fit_mask] & (error > 0.0)
     parsed_exclusions = []
     for window in exclusion_windows:
@@ -296,6 +301,7 @@ def prepare_observed_spectrum_data(
             "nonpositive_error_pixels_excluded": int(
                 np.count_nonzero(invalid_error)
             ),
+            "uncertainty_scale": uncertainty_scale,
         }
     )
     return SpectrumData(

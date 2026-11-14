@@ -37,6 +37,7 @@ from .observations import (
     load_stis_x1d,
     load_stis_lsf,
     load_stis_target_observation,
+    load_stis_target_spectrum,
     prepare_stis_observation,
     stis_airglow_wavelength,
 )
@@ -78,6 +79,7 @@ __all__ = [
     "load_stis_x1d",
     "load_stis_lsf",
     "load_stis_target_observation",
+    "load_stis_target_spectrum",
     "prepare_stis_observation",
     "stis_airglow_wavelength",
     "tau_profile",
