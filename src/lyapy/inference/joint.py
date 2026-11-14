@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 
 import jax.numpy as jnp
+import numpy as np
 
 from lyapy.inference.common import SpectrumData
 from lyapy.inference.noise import (
@@ -77,6 +78,102 @@ class JointSpectrumData:
                 for name, data in spectra.items()
             )
         )
+
+
+def _validated_coadd_spectra(spectra):
+    spectra = tuple(spectra)
+    if len(spectra) < 2:
+        raise ValueError("coaddition requires at least two spectra")
+    if not all(isinstance(spectrum, SpectrumData) for spectrum in spectra):
+        raise TypeError("spectra must contain SpectrumData values")
+    reference = spectra[0]
+    for spectrum in spectra[1:]:
+        if not np.array_equal(spectrum.wavelength, reference.wavelength):
+            raise ValueError(
+                "inverse-variance coaddition requires identical wavelength "
+                "grids; retain the native grids and use a joint fit"
+            )
+        if not np.array_equal(
+            spectrum.convolution_kernel,
+            reference.convolution_kernel,
+        ):
+            raise ValueError(
+                "inverse-variance coaddition requires identical convolution "
+                "kernels; use a joint fit for exposure-specific LSFs"
+            )
+        if not np.array_equal(
+            spectrum.likelihood_mask,
+            reference.likelihood_mask,
+        ):
+            raise ValueError(
+                "inverse-variance coaddition requires identical likelihood "
+                "masks; use a joint fit for exposure-specific masking"
+            )
+    return spectra
+
+
+def inverse_variance_coadd(spectra):
+    """Coadd spectra only in the exact Gaussian-equivalence case.
+
+    The inputs must share a wavelength grid, convolution kernel, and likelihood
+    mask. Under independent Gaussian errors and one common detector-space
+    prediction, the returned spectrum contains exactly the same
+    parameter-dependent likelihood as the joint exposures. No interpolation or
+    covariance approximation is performed.
+    """
+    spectra = _validated_coadd_spectra(spectra)
+    reference = spectra[0]
+    inverse_variances = np.stack(
+        [1.0 / spectrum.error**2 for spectrum in spectra]
+    )
+    total_inverse_variance = np.sum(inverse_variances, axis=0)
+    flux = np.sum(
+        inverse_variances
+        * np.stack([spectrum.flux for spectrum in spectra]),
+        axis=0,
+    ) / total_inverse_variance
+    error = 1.0 / np.sqrt(total_inverse_variance)
+    metadata = dict(reference.metadata)
+    metadata.update(
+        {
+            "coadd_method": "inverse_variance",
+            "coadd_exposure_count": len(spectra),
+            "coadd_likelihood_equivalence": (
+                "independent Gaussian errors, identical wavelength grids, "
+                "identical detector-space predictions"
+            ),
+            "coadd_source_metadata": [
+                dict(spectrum.metadata) for spectrum in spectra
+            ],
+        }
+    )
+    return SpectrumData(
+        reference.wavelength,
+        flux,
+        error,
+        reference.convolution_kernel,
+        likelihood_mask=reference.likelihood_mask,
+        metadata=metadata,
+    )
+
+
+def gaussian_coadd_log_likelihood_offset(spectra):
+    """Return the model-independent joint-minus-coadd Gaussian constant."""
+    spectra = _validated_coadd_spectra(spectra)
+    coadded = inverse_variance_coadd(spectra)
+    mask = coadded.likelihood_mask
+    flux = np.stack([spectrum.flux[mask] for spectrum in spectra])
+    error = np.stack([spectrum.error[mask] for spectrum in spectra])
+    inverse_variance = 1.0 / error**2
+    coadded_flux = coadded.flux[mask]
+    scatter = np.sum(inverse_variance * (flux - coadded_flux) ** 2)
+    joint_normalization = np.sum(np.log(2.0 * np.pi * error**2))
+    coadd_normalization = np.sum(
+        np.log(2.0 * np.pi * coadded.error[mask] ** 2)
+    )
+    return float(
+        -0.5 * (scatter + joint_normalization - coadd_normalization)
+    )
 
 
 @dataclass(frozen=True)

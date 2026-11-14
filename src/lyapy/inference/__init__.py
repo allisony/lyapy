@@ -68,6 +68,8 @@ from .joint import (
     NamedSpectrumData,
     evaluate_joint_jax_log_likelihoods,
     evaluate_joint_numpy_log_likelihoods,
+    gaussian_coadd_log_likelihood_offset,
+    inverse_variance_coadd,
 )
 from .noise import (
     GaussianNoiseModel,
@@ -242,4 +244,6 @@ __all__ = [
     "evaluate_psis_loo",
     "evaluate_joint_jax_log_likelihoods",
     "evaluate_joint_numpy_log_likelihoods",
+    "gaussian_coadd_log_likelihood_offset",
+    "inverse_variance_coadd",
 ]
