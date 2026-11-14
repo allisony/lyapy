@@ -35,7 +35,10 @@ def test_forward_model_components_are_physically_composed():
 
 def test_legacy_adapter_matches_frozen_convolved_model(legacy_reference):
     wave = legacy_reference["wave"]
-    raw_lsf = np.loadtxt(PACKAGE_DATA / "STIS_E140M_LSF.dat", skiprows=2)
+    raw_lsf = np.loadtxt(
+        PACKAGE_DATA / "data" / "stis_lsf" / "LSF_E140M_1200.txt",
+        skiprows=2,
+    )
 
     model = legacy_voigt_model(
         [wave],

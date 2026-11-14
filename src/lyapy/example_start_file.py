@@ -1,5 +1,6 @@
 import numpy as np
 from lyapy import lyapy
+from lyapy import load_stis_lsf
 from lyapy.fitting import *
 from scipy.io import readsav
 import time
@@ -114,13 +115,11 @@ else:
                     ## lyapy.make_kernel
 #resolution = spec_hdu[0].header['SPECRES']
 
-## If you want to use one of the LSF's from STScI's website, currently you must download it locally
-## as a text file and read it in here. Comment the next 5 lines out if not using this, and set 
-## the resolution keyword to a float.
-lsf_filename = 'STIS_E140M_LSF.dat'
-lsf = np.loadtxt(lsf_filename,skiprows=2) # 0.2x0.2 E140M - confirmed from MAST
-lsf_wave = lsf[:,0]
-lsf_array = lsf[:,3]
+## Lyapy bundles the STScI aperture-specific UV LSF tables. You can pass
+## path='new_stis_lsf_table.dat' to load_stis_lsf to override this default.
+lsf = load_stis_lsf("E140M", "0.2x0.2", wavelength=1215.67)
+lsf_wave = lsf.offset
+lsf_array = lsf.profile
 lsf_list = [lsf_wave,lsf_array]
 
 

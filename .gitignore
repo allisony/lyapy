@@ -1,6 +1,7 @@
 *.png
 *.txt
 !requirements*.txt
+!src/lyapy/data/stis_lsf/*.txt
 *.pyc
 *.swp
 *.egg-info/

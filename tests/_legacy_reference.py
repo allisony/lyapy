@@ -72,7 +72,10 @@ def evaluate_gj411_legacy_case():
     flux = full_flux[fit_mask] - continuum[fit_mask]
     error = full_error[fit_mask]
 
-    raw_lsf = np.loadtxt(PACKAGE_DATA / "STIS_E140M_LSF.dat", skiprows=2)
+    raw_lsf = np.loadtxt(
+        PACKAGE_DATA / "data" / "stis_lsf" / "LSF_E140M_1200.txt",
+        skiprows=2,
+    )
     lsf_kernel = lyapy.ready_stis_lsf(
         raw_lsf[:, 0], raw_lsf[:, 3], wave[1] - wave[0], wave
     )

@@ -15,7 +15,8 @@ than silently incorporated into this file.
 - Source Git commit: `bfb27ca`
 - Reference case: `src/lyapy/example_start_file.py`
 - Spectrum: `src/lyapy/HD-95735-E140M-odn905010_1.xl_stis`
-- LSF: `src/lyapy/STIS_E140M_LSF.dat`
+- LSF at the source commit: `src/lyapy/STIS_E140M_LSF.dat`; its identical
+  canonical copy is now `src/lyapy/data/stis_lsf/LSF_E140M_1200.txt`
 - Environment: Miniforge `base` at `/Users/aayoungb/miniforge3`
 - Python: 3.12.12
 - NumPy: 2.4.2

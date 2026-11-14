@@ -56,7 +56,12 @@ def make_model(oversample):
     detector_wavelength = np.linspace(1214.5, 1216.55, 160)
     dispersion = np.median(np.diff(detector_wavelength))
     table = np.loadtxt(
-        REPOSITORY_ROOT / "src" / "lyapy" / "STIS_E140M_LSF.dat",
+        REPOSITORY_ROOT
+        / "src"
+        / "lyapy"
+        / "data"
+        / "stis_lsf"
+        / "LSF_E140M_1200.txt",
         skiprows=2,
     )
     lsf_offsets = table[:, 0] * dispersion
