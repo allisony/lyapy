@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[test,inference]' build
+      - name: Run tests
+        run: python -m pytest
+      - name: Run canonical NUTS workflow
+        if: matrix.python-version == '3.12'
+        run: >-
+          python tools/example_inference_workflow.py
+          --quick
+          --no-progress
+          --output-directory /tmp/lyapy-example
+      - name: Build distributions
+        run: python -m build
+      - name: Smoke-test installed wheel
+        run: |
+          python -m venv --system-site-packages /tmp/lyapy-wheel-smoke
+          /tmp/lyapy-wheel-smoke/bin/python -m pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/lyapy-wheel-smoke/bin/python -c "import lyapy; from lyapy import load_stis_lsf; assert load_stis_lsf('G140L', '52x0.2').profile.size > 500"

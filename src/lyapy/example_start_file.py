@@ -1,3 +1,10 @@
+"""Historical emcee workflow retained for reproducibility.
+
+New analyses should use ``tools/example_inference_workflow.py`` and the
+``lyapy.inference`` API. This file preserves the original procedural workflow;
+it is not the supported starting point for new fits.
+"""
+
 import numpy as np
 from lyapy import lyapy
 from lyapy import load_stis_lsf
